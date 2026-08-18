@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.vscode/
+models/ViT-B-32.pt
