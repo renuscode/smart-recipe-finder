@@ -6,3 +6,5 @@ __pycache__/
 models/
 images/
 dataset/
+instance/
+static/uploads/

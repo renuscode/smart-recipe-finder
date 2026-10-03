@@ -1,452 +1,476 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
-
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Recipe Finder | {% if recipe.found %}{{ recipe.name }}{% else %}Recipe Details{% endif %}</title>
 
-    <title>Smart Recipe Finder | Recipe</title>
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <!-- Bootstrap -->
-
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet">
-
-    <!-- Font Awesome -->
-
-    <link
-        rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
     <!-- Custom CSS -->
-
-    <link rel="stylesheet" href="../static/css/style.css">
-
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 
 <body>
 
-
 <!-- =========================================================
      NAVBAR
 ========================================================= -->
-
 <nav class="navbar custom-navbar">
-
     <div class="container">
-
-        <a class="navbar-brand logo-area" href="upload.html">
-
+        <a class="navbar-brand logo-area" href="{{ url_for('home_page') }}">
             <div class="logo-circle">
                 <i class="fa-solid fa-utensils"></i>
             </div>
-
             <span>Smart Recipe Finder</span>
-
         </a>
 
-
         <div class="navbar-links">
-
-            <a class="nav-link" href="upload.html">
+            <a class="nav-link" href="{{ url_for('home_page') }}">
+                <i class="fa-solid fa-house"></i>
+                Home
+            </a>
+            <a class="nav-link" href="{{ url_for('upload_page') }}">
                 <i class="fa-solid fa-cloud-arrow-up"></i>
                 Upload
             </a>
-
-            <!-- Teammate -->
-            <a class="nav-link" href="recognition.html">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                Recognition
-            </a>
-
-            <a class="nav-link active" href="recipe.html">
+            <a class="nav-link active" href="{{ url_for('recipe_page') }}">
                 <i class="fa-solid fa-book-open"></i>
                 Recipe
             </a>
-
-            <!-- Teammate -->
-            <a class="nav-link" href="health.html">
-                <i class="fa-solid fa-heart-pulse"></i>
-                Health
-            </a>
-
+            {% if user %}
+                <a class="nav-link" href="{{ url_for('logout') }}">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    Logout
+                </a>
+            {% else %}
+                <a class="nav-link" href="{{ url_for('login_page') }}">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    Login
+                </a>
+            {% endif %}
         </div>
-
     </div>
-
 </nav>
 
 
 <!-- =========================================================
-     RECIPE PAGE
+     RECIPE PAGE CONTENT
 ========================================================= -->
-
 <main class="recipe-page">
-
     <div class="container">
 
+        {% if recipe.found %}
 
-        <!-- Page heading -->
-
-        <section class="recipe-heading">
-
-            <div>
-
-                <span class="small-badge">
-                    <i class="fa-solid fa-circle-check"></i>
-                    DISH IDENTIFIED
-                </span>
-
-                <h1>
-                    Your Recipe
-                </h1>
-
-                <p>
-                    Here is the recipe for your recognized dish.
-                </p>
-
-            </div>
-
-
-            <a href="recognition.html" class="back-link">
-
-                <i class="fa-solid fa-arrow-left"></i>
-
-                Back to Recognition
-
-            </a>
-
-        </section>
-
-
-        <!-- =================================================
-             DISH HERO
-        ================================================== -->
-
-        <section class="recipe-hero">
-
-            <div class="recipe-image">
-
-                <div class="food-symbol">
-
-                    <i class="fa-solid fa-bowl-food"></i>
-
+            <!-- Heading -->
+            <section class="recipe-heading">
+                <div>
+                    <span class="small-badge">
+                        <i class="fa-solid fa-circle-check"></i>
+                        DISH IDENTIFIED
+                    </span>
+                    <h1>Your Recipe</h1>
+                    <p>Here is the authentic recipe for your recognized dish.</p>
                 </div>
 
-            </div>
+                <a href="{{ url_for('upload_page') }}" class="back-link">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Back to Upload
+                </a>
+            </section>
 
 
-            <div class="recipe-main-info">
-
-                <span class="dish-category">
-                    SOUTH INDIAN
-                </span>
-
-                <h2>
-                    Dosa
-                </h2>
-
-                <p>
-                    A traditional South Indian dish made from
-                    fermented rice and urad dal batter.
-                </p>
-
-
-                <div class="recipe-meta">
-
-                    <div>
-                        <i class="fa-regular fa-clock"></i>
-                        <span>
-                            30 Minutes
-                        </span>
-                    </div>
-
-                    <div>
-                        <i class="fa-solid fa-utensils"></i>
-                        <span>
-                            Breakfast
-                        </span>
-                    </div>
-
-                    <div>
-                        <i class="fa-solid fa-leaf"></i>
-                        <span>
-                            Vegetarian
-                        </span>
-                    </div>
-
+            <!-- =================================================
+                 DISH HERO SECTION
+            ================================================== -->
+            <section class="recipe-hero">
+                <div class="recipe-image position-relative" style="overflow: hidden;">
+                    {% if user_image %}
+                        <!-- User Captured / Uploaded Image -->
+                        <img src="{{ user_image }}" alt="{{ recipe.name }}" style="width: 100%; height: 100%; object-fit: cover;">
+                    {% elif recipe.image_url %}
+                        <!-- Resolved Dataset Image -->
+                        <img src="{{ recipe.image_url }}" alt="{{ recipe.name }}" style="width: 100%; height: 100%; object-fit: cover;">
+                    {% else %}
+                        <!-- Elegant Placeholder Graphic -->
+                        <div class="food-symbol">
+                            <i class="fa-solid fa-bowl-food"></i>
+                        </div>
+                    {% endif %}
                 </div>
 
-            </div>
+                <div class="recipe-main-info">
+                    <span class="dish-category">
+                        {{ recipe.cuisine | upper }}
+                        {% if recipe.predicted_variety %}
+                            &bull; {{ recipe.predicted_variety | upper }}
+                        {% elif recipe.matched_dish %}
+                            &bull; {{ recipe.matched_dish | upper }}
+                        {% endif %}
+                    </span>
 
-        </section>
+                    <h2>{{ recipe.name | title }}</h2>
+
+                    <p>{{ recipe.description }}</p>
+
+                    <div class="recipe-meta">
+                        <div>
+                            <i class="fa-regular fa-clock"></i>
+                            <span>{{ recipe.prep_time }}</span>
+                        </div>
+
+                        <div>
+                            <i class="fa-solid fa-utensils"></i>
+                            <span>{{ recipe.course }}</span>
+                        </div>
+
+                        <div>
+                            <i class="fa-solid fa-leaf"></i>
+                            <span>{{ recipe.diet }}</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
 
-        <!-- =================================================
-             RECIPE CONTENT
-        ================================================== -->
+            <!-- =================================================
+                 RECIPE CONTENT (Ingredients & Preparation)
+            ================================================== -->
+            <section class="recipe-content">
 
-        <section class="recipe-content">
-
-
-            <!-- Ingredients -->
-
-            <div class="recipe-panel">
-
-                <div class="panel-title">
-
-                    <div class="panel-icon green-icon">
-
-                        <i class="fa-solid fa-basket-shopping"></i>
-
+                <!-- Dynamic Ingredients Panel -->
+                <div class="recipe-panel">
+                    <div class="panel-title">
+                        <div class="panel-icon green-icon">
+                            <i class="fa-solid fa-basket-shopping"></i>
+                        </div>
+                        <div>
+                            <h3>Ingredients</h3>
+                            <p>What you need</p>
+                        </div>
                     </div>
 
-                    <div>
-
-                        <h3>
-                            Ingredients
-                        </h3>
-
-                        <p>
-                            What you need
-                        </p>
-
-                    </div>
-
+                    <ul class="ingredient-list">
+                        {% for item in recipe.ingredients %}
+                            <li>
+                                <span>{{ item.name }}</span>
+                                {% if item.amount %}
+                                    <strong>{{ item.amount }}</strong>
+                                {% endif %}
+                            </li>
+                        {% else %}
+                            <li><span>Ingredients not specified in dataset.</span></li>
+                        {% endfor %}
+                    </ul>
                 </div>
 
 
-                <ul class="ingredient-list">
-
-                    <li>
-                        <span>
-                            Rice
-                        </span>
-
-                        <strong>
-                            2 cups
-                        </strong>
-                    </li>
-
-                    <li>
-                        <span>
-                            Urad Dal
-                        </span>
-
-                        <strong>
-                            1 cup
-                        </strong>
-                    </li>
-
-                    <li>
-                        <span>
-                            Water
-                        </span>
-
-                        <strong>
-                            As required
-                        </strong>
-                    </li>
-
-                    <li>
-                        <span>
-                            Salt
-                        </span>
-
-                        <strong>
-                            To taste
-                        </strong>
-                    </li>
-
-                    <li>
-                        <span>
-                            Cooking Oil
-                        </span>
-
-                        <strong>
-                            2 tbsp
-                        </strong>
-                    </li>
-
-                </ul>
-
-            </div>
-
-
-            <!-- Preparation -->
-
-            <div class="recipe-panel">
-
-                <div class="panel-title">
-
-                    <div class="panel-icon orange-icon">
-
-                        <i class="fa-solid fa-list-ol"></i>
-
+                <!-- Dynamic Preparation Steps Panel -->
+                <div class="recipe-panel">
+                    <div class="panel-title">
+                        <div class="panel-icon orange-icon">
+                            <i class="fa-solid fa-list-ol"></i>
+                        </div>
+                        <div>
+                            <h3>Preparation</h3>
+                            <p>Step-by-step method</p>
+                        </div>
                     </div>
 
+                    <div class="steps">
+                        {% for step in recipe.instructions %}
+                            <div class="step">
+                                <span>{{ "%02d" % loop.index }}</span>
+                                <p>{{ step }}</p>
+                            </div>
+                        {% else %}
+                            <p class="text-muted">Preparation steps not available in dataset.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+            </section>
+
+
+            <!-- =================================================
+                 RECIPE SUMMARY / NOTE
+            ================================================== -->
+            {% if recipe.description %}
+                <section class="recipe-note">
+                    <div class="note-icon">
+                        <i class="fa-solid fa-lightbulb"></i>
+                    </div>
                     <div>
-
-                        <h3>
-                            Preparation
-                        </h3>
-
-                        <p>
-                            Step-by-step method
-                        </p>
-
+                        <h4>Recipe Overview</h4>
+                        <p>{{ recipe.description }}</p>
                     </div>
+                </section>
+            {% endif %}
 
+
+            <!-- =================================================
+                 NEXT ACTION (Replaces Health module cleanly)
+            ================================================== -->
+            <section class="health-navigation">
+                <div>
+                    <span>NEXT DISH</span>
+                    <h3>Want to identify another dish?</h3>
+                    <p>Upload another food image or snap a photo using your camera.</p>
                 </div>
 
+                <a href="{{ url_for('upload_page') }}" class="health-action-btn">
+                    <i class="fa-solid fa-camera"></i>
+                    Scan Another Dish
+                </a>
+            </section>
 
-                <div class="steps">
+        {% else %}
 
-                    <div class="step">
-
-                        <span>
-                            01
-                        </span>
-
-                        <p>
-                            Soak rice and urad dal separately
-                            for several hours.
-                        </p>
-
-                    </div>
-
-
-                    <div class="step">
-
-                        <span>
-                            02
-                        </span>
-
-                        <p>
-                            Grind the soaked ingredients into
-                            a smooth batter.
-                        </p>
-
-                    </div>
-
-
-                    <div class="step">
-
-                        <span>
-                            03
-                        </span>
-
-                        <p>
-                            Allow the batter to ferment
-                            overnight.
-                        </p>
-
-                    </div>
-
-
-                    <div class="step">
-
-                        <span>
-                            04
-                        </span>
-
-                        <p>
-                            Heat a pan and spread the batter
-                            into a thin circular shape.
-                        </p>
-
-                    </div>
-
-
-                    <div class="step">
-
-                        <span>
-                            05
-                        </span>
-
-                        <p>
-                            Cook until golden and crispy.
-                            Serve hot.
-                        </p>
-
-                    </div>
-
+            <!-- =================================================
+                 RECIPE NOT FOUND STATE
+            ================================================== -->
+            <section class="recipe-heading">
+                <div>
+                    <span class="small-badge" style="background: #fff3cd; color: #856404; border: 1px solid #ffeeba;">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        RECIPE UNAVAILABLE
+                    </span>
+                    <h1>Recipe Not Found</h1>
+                    <p>
+                        {% if recipe.query %}
+                            We couldn't find a recipe for <strong>{{ recipe.query }}</strong> in our dataset.
+                        {% else %}
+                            {{ recipe.message }}
+                        {% endif %}
+                    </p>
                 </div>
+                <a href="{{ url_for('upload_page') }}" class="back-link">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Back to Upload
+                </a>
+            </section>
 
-            </div>
-
-        </section>
-
-
-        <!-- =================================================
-             RECIPE SUMMARY
-        ================================================== -->
-
-        <section class="recipe-note">
-
-            <div class="note-icon">
-
-                <i class="fa-solid fa-lightbulb"></i>
-
-            </div>
-
-            <div>
-
-                <h4>
-                    Serving Suggestion
-                </h4>
-
-                <p>
-                    Dosa can be served with sambar,
-                    coconut chutney or vegetable-based
-                    side dishes.
-                </p>
-
-            </div>
-
-        </section>
-
-
-        <!-- =================================================
-             NEXT PAGE - TEAMMATE HEALTH PAGE
-        ================================================== -->
-
-        <section class="health-navigation">
-
-            <div>
-
-                <span>
-                    NEXT
-                </span>
-
-                <h3>
-                    Want to know more about this dish?
+            <!-- Similar Dishes Flashcards -->
+            {% if recipe.alternatives and recipe.alternatives | length > 0 %}
+            <section style="margin-bottom: 2rem;">
+                <h3 style="color: #24472c; font-weight: 700; margin-bottom: 1rem;">
+                    <i class="fa-solid fa-wand-magic-sparkles text-success me-2"></i>
+                    You May Also Like
                 </h3>
+                <div class="flashcard-grid">
+                    {% for alt in recipe.alternatives %}
+                    <a href="/recipe?dish={{ alt.dish | urlencode }}&variety={{ alt.variety | urlencode }}"
+                       class="flashcard-link">
+                        <div class="flashcard">
+                            {% if alt.image_url %}
+                                <img src="{{ alt.image_url }}" alt="{{ alt.name }}" class="flashcard-img">
+                            {% else %}
+                                <div class="flashcard-img-placeholder">
+                                    <i class="fa-solid fa-bowl-food"></i>
+                                </div>
+                            {% endif %}
+                            <div class="flashcard-body">
+                                <div class="flashcard-name">{{ alt.name }}</div>
+                                {% if alt.confidence %}
+                                <div class="flashcard-confidence">
+                                    <span class="flashcard-pct">{{ alt.confidence }}% match</span>
+                                </div>
+                                {% endif %}
+                                <div class="flashcard-meta">{{ alt.cuisine }}
+                                    {% if alt.diet %} &bull; {{ alt.diet }}{% endif %}
+                                </div>
+                                <span class="flashcard-btn">View Recipe</span>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
 
-                <p>
-                    Explore health information and
-                    healthier alternatives.
-                </p>
+            <!-- Recipe Search Box -->
+            <section class="recipe-search-section">
+                <h4 style="color: #24472c; font-weight: 700; margin-bottom: 0.75rem;">
+                    <i class="fa-solid fa-magnifying-glass text-success me-2"></i>
+                    Search Recipes in Our Dataset
+                </h4>
+                <div class="recipe-search-bar">
+                    <input type="text" id="recipeSearchInput" class="recipe-search-input"
+                           placeholder="Search by dish name, cuisine... (e.g. Biryani, South Indian)">
+                    <button id="recipeSearchBtn" class="recipe-search-submit">
+                        <i class="fa-solid fa-search"></i> Search
+                    </button>
+                </div>
+                <div id="recipeSearchResults" class="flashcard-grid mt-3"></div>
+            </section>
 
+            <!-- Action Buttons -->
+            <div class="text-center mt-4 mb-5">
+                <a href="{{ url_for('upload_page') }}" class="main-action-btn me-2">
+                    <i class="fa-solid fa-camera"></i>
+                    Scan Another Dish
+                </a>
+                <a href="/recipe?dish=Dosa&variety=plain+dosa" class="health-action-btn">
+                    <i class="fa-solid fa-book-open"></i>
+                    Explore Recipes
+                </a>
             </div>
 
-
-            <a href="health.html" class="health-action-btn">
-
-                View Health Information
-
-                <i class="fa-solid fa-arrow-right"></i>
-
-            </a>
-
-        </section>
-
+        {% endif %}
 
     </div>
-
 </main>
+
+<!-- =================================================
+     FLOATING COOKING ASSISTANT CHATBOT WIDGET
+================================================== -->
+{% if recipe.found %}
+<script>
+    /* Pass recipe context to chatbot as JSON */
+    var RECIPE_CONTEXT = {{ recipe | tojson }};
+</script>
+{% else %}
+<script>var RECIPE_CONTEXT = null;</script>
+{% endif %}
+
+<!-- Floating Chat Button -->
+<button id="chatToggleBtn" class="chat-toggle-btn" title="Ask the Cooking Assistant">
+    <i class="fa-solid fa-comments"></i>
+    <span class="chat-badge">AI</span>
+</button>
+
+<!-- Chat Widget Panel -->
+<div id="chatWidget" class="chat-widget d-none">
+    <div class="chat-widget-header">
+        <div>
+            <i class="fa-solid fa-robot me-2"></i>
+            <strong>Cooking Assistant</strong>
+        </div>
+        <button id="chatCloseBtn" class="chat-close-btn">&times;</button>
+    </div>
+    <div id="chatMessages" class="chat-messages">
+        <div class="chat-bubble bot-bubble">
+            ðŸ‘‹ Hi! I'm your Cooking Assistant. Ask me anything about this recipe â€” ingredients, steps, timing, or tips!
+        </div>
+    </div>
+    <div class="chat-input-area">
+        <input type="text" id="chatInput" class="chat-input" placeholder="Ask about this recipe...">
+        <button id="chatSendBtn" class="chat-send-btn">
+            <i class="fa-solid fa-paper-plane"></i>
+        </button>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- jQuery (needed for recipe search & chatbot AJAX) -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<script>
+/* =========================================================
+   Recipe Page: Search + Chatbot Widget
+========================================================= */
+
+// --- Recipe Search ---
+function renderSearchCards(results) {
+    var $container = $("#recipeSearchResults");
+    $container.empty();
+    if (!results || results.length === 0) {
+        $container.html('<p class="text-muted">No recipes found. Try a different search term.</p>');
+        return;
+    }
+    results.forEach(function(r) {
+        var imgHtml = r.image_url
+            ? '<img src="' + r.image_url + '" alt="' + r.name + '" class="flashcard-img">'
+            : '<div class="flashcard-img-placeholder"><i class="fa-solid fa-bowl-food"></i></div>';
+
+        var card = '<a href="/recipe?dish=' + encodeURIComponent(r.matched_dish || r.name) +
+                   '&variety=' + encodeURIComponent(r.predicted_variety || '') +
+                   '" class="flashcard-link">' +
+                   '<div class="flashcard">' + imgHtml +
+                   '<div class="flashcard-body">' +
+                   '<div class="flashcard-name">' + r.name + '</div>' +
+                   '<div class="flashcard-meta">' + (r.cuisine || '') +
+                   (r.diet ? ' &bull; ' + r.diet : '') + '</div>' +
+                   '<span class="flashcard-btn">View Recipe</span>' +
+                   '</div></div></a>';
+        $container.append(card);
+    });
+}
+
+function doRecipeSearch() {
+    var q = $("#recipeSearchInput").val().trim();
+    if (!q) return;
+    $.getJSON("/api/search_recipes", { q: q }, function(data) {
+        renderSearchCards(data.results);
+    }).fail(function() {
+        $("#recipeSearchResults").html('<p class="text-danger">Search failed. Please try again.</p>');
+    });
+}
+
+$("#recipeSearchBtn").on("click", doRecipeSearch);
+$("#recipeSearchInput").on("keydown", function(e) {
+    if (e.key === "Enter") doRecipeSearch();
+});
+
+// --- Chatbot Widget ---
+$("#chatToggleBtn").on("click", function() {
+    $("#chatWidget").toggleClass("d-none");
+    if (!$("#chatWidget").hasClass("d-none")) {
+        $("#chatInput").focus();
+    }
+});
+
+$("#chatCloseBtn").on("click", function() {
+    $("#chatWidget").addClass("d-none");
+});
+
+function appendBubble(text, isBot) {
+    var cls = isBot ? "bot-bubble" : "user-bubble";
+    var html = '<div class="chat-bubble ' + cls + '">' + $('<span>').text(text).html() + '</div>';
+    $("#chatMessages").append(html);
+    $("#chatMessages").scrollTop($("#chatMessages")[0].scrollHeight);
+}
+
+function sendChatMessage() {
+    var msg = $("#chatInput").val().trim();
+    if (!msg) return;
+    appendBubble(msg, false);
+    $("#chatInput").val("");
+
+    // Show typing indicator
+    var $typing = $('<div class="chat-bubble bot-bubble typing-indicator">Thinking...</div>');
+    $("#chatMessages").append($typing);
+    $("#chatMessages").scrollTop($("#chatMessages")[0].scrollHeight);
+
+    $.ajax({
+        url: "/api/chat",
+        type: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ message: msg, recipe_context: RECIPE_CONTEXT }),
+        success: function(res) {
+            $typing.remove();
+            appendBubble(res.reply || "Sorry, I could not understand that.", true);
+        },
+        error: function() {
+            $typing.remove();
+            appendBubble("The cooking assistant is temporarily unavailable.", true);
+        }
+    });
+}
+
+$("#chatSendBtn").on("click", sendChatMessage);
+$("#chatInput").on("keydown", function(e) {
+    if (e.key === "Enter") sendChatMessage();
+});
+</script>
 
 </body>
 </html>
+

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Smart Recipe Finder | Upload Food</title>
+    <title>Smart Recipe Finder | Upload</title>
 
     <!-- Bootstrap -->
     <link
@@ -17,8 +17,10 @@
         rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="../static/css/style.css">
+    <!-- Project CSS -->
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 
 <body>
@@ -31,7 +33,8 @@
 
     <div class="container">
 
-        <a class="navbar-brand logo-area" href="upload.html">
+        <a class="navbar-brand logo-area"
+           href="{{ url_for('home_page') }}">
 
             <div class="logo-circle">
                 <i class="fa-solid fa-utensils"></i>
@@ -41,29 +44,57 @@
 
         </a>
 
+
         <div class="navbar-links">
 
-            <a class="nav-link active" href="upload.html">
+            <a class="nav-link"
+               href="{{ url_for('home_page') }}">
+
+                <i class="fa-solid fa-house"></i>
+                Home
+
+            </a>
+
+
+            <a class="nav-link active"
+               href="{{ url_for('upload_page') }}">
+
                 <i class="fa-solid fa-cloud-arrow-up"></i>
                 Upload
+
             </a>
 
-            <!-- Teammate's page -->
-            <a class="nav-link" href="recognition.html">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                Recognition
-            </a>
 
-            <a class="nav-link" href="recipe.html">
+            <a class="nav-link"
+               href="{{ url_for('recipe_page') }}">
+
                 <i class="fa-solid fa-book-open"></i>
                 Recipe
+
             </a>
 
-            <!-- Teammate's page -->
-            <a class="nav-link" href="health.html">
-                <i class="fa-solid fa-heart-pulse"></i>
-                Health
-            </a>
+
+            {% if user %}
+
+                <a class="nav-link"
+                   href="{{ url_for('logout') }}">
+
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    Logout
+
+                </a>
+
+            {% else %}
+
+                <a class="nav-link"
+                   href="{{ url_for('login_page') }}">
+
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    Login
+
+                </a>
+
+            {% endif %}
 
         </div>
 
@@ -73,184 +104,1008 @@
 
 
 <!-- =========================================================
-     UPLOAD PAGE
+     MAIN UPLOAD AREA
 ========================================================= -->
 
 <main class="upload-page">
 
     <div class="container">
 
-        <!-- Heading -->
+        <section class="upload-heading">
 
-        <section class="page-intro text-center">
+            <span class="small-badge">
 
-            <div class="small-badge">
-                <i class="fa-solid fa-camera"></i>
-                FOOD RECOGNITION
-            </div>
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
 
-            <h1>
-                What's on your plate?
-            </h1>
+                AI FOOD IDENTIFICATION
+
+            </span>
+
+            <h1>Identify Your Food</h1>
 
             <p>
-                Upload a photo of your food and let
-                <strong>Smart Recipe Finder</strong>
-                help you discover its recipe.
+                Upload a food image or capture one using your camera
+                to discover the dish and recipe.
             </p>
 
         </section>
 
 
-        <!-- Upload Card -->
+        <!-- =====================================================
+             UPLOAD CARD
+        ====================================================== -->
 
         <section class="upload-card">
 
-            <div class="upload-card-left">
+            <!-- Image preview -->
 
-                <div class="upload-icon-large">
-                    <i class="fa-solid fa-cloud-arrow-up"></i>
-                </div>
+            <div class="preview-area">
 
-                <h2>
-                    Upload your food image
-                </h2>
-
-                <p>
-                    Choose a clear image of your dish.
-                    Our recognition system will identify
-                    the food for you.
-                </p>
-
-                <!-- File Input -->
-
-                <label for="foodImage" class="choose-image-btn">
+                <div
+                    id="emptyPreviewBox"
+                    class="empty-preview-box">
 
                     <i class="fa-solid fa-image"></i>
 
-                    Choose Food Image
-
-                </label>
-
-                <input
-                    type="file"
-                    id="foodImage"
-                    accept=".jpg,.jpeg,.png"
-                    hidden>
-
-                <div class="supported-format">
-
-                    <i class="fa-solid fa-circle-check"></i>
-
-                    JPG, JPEG and PNG supported
-
-                </div>
-
-            </div>
-
-
-            <!-- Preview Area -->
-
-            <div class="preview-card">
-
-                <div class="preview-top">
-
-                    <span>
-                        Image Preview
-                    </span>
-
-                    <i class="fa-regular fa-image"></i>
-
-                </div>
-
-                <div class="preview-box">
-
-                    <i class="fa-solid fa-bowl-food"></i>
-
-                    <h4>
-                        Your image will appear here
-                    </h4>
-
                     <p>
-                        Select an image to continue
+                        Your food image will appear here
                     </p>
 
                 </div>
 
-            </div>
 
-        </section>
-
-
-        <!-- Information cards -->
-
-        <section class="upload-features">
-
-            <div class="feature-card">
-
-                <div class="feature-icon green-icon">
-                    <i class="fa-solid fa-image"></i>
-                </div>
-
-                <div>
-                    <h5>Upload</h5>
-                    <p>Select a food image from your device.</p>
-                </div>
+                <img
+                    id="activeImagePreview"
+                    src=""
+                    alt="Selected food"
+                    style="
+                        display:none;
+                        width:100%;
+                        max-height:420px;
+                        object-fit:contain;
+                        border-radius:15px;
+                    ">
 
             </div>
 
 
-            <div class="feature-card">
+            <!-- =================================================
+                 HIDDEN FILE INPUT
+            ================================================== -->
 
-                <div class="feature-icon orange-icon">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-                </div>
+            <input
+                type="file"
+                id="foodImageInput"
+                accept=".jpg,.jpeg,.png,.webp,.bmp"
+                hidden>
 
-                <div>
-                    <h5>Recognize</h5>
-                    <p>The next page identifies the dish.</p>
-                </div>
+
+            <!-- =================================================
+                 ACTION BUTTONS
+            ================================================== -->
+
+            <div class="upload-actions">
+
+                <button
+                    type="button"
+                    class="choose-image-btn"
+                    id="chooseFileBtn">
+
+                    <i class="fa-solid fa-folder-open"></i>
+
+                    Choose Image
+
+                </button>
+
+
+                <button
+                    type="button"
+                    class="choose-image-btn"
+                    id="cameraModeBtn">
+
+                    <i class="fa-solid fa-camera"></i>
+
+                    Use Camera
+
+                </button>
 
             </div>
 
 
-            <div class="feature-card">
+            <p class="upload-help">
 
-                <div class="feature-icon blue-icon">
-                    <i class="fa-solid fa-book-open"></i>
-                </div>
+                Supported formats:
+                JPG, JPEG, PNG, WEBP, BMP
 
-                <div>
-                    <h5>Discover Recipe</h5>
-                    <p>View the recipe after recognition.</p>
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <!-- Next button -->
-
-        <div class="next-section">
-
-            <p>
-                Image selected? Continue to food recognition.
             </p>
 
-            <a href="recognition.html" class="main-action-btn">
+        </section>
 
-                Continue to Recognition
 
-                <i class="fa-solid fa-arrow-right"></i>
+        <!-- =====================================================
+             LOADING
+        ====================================================== -->
 
-            </a>
+        <section
+            id="loadingSection"
+            style="display:none;"
+            class="text-center mt-4">
+
+            <div
+                class="spinner-border text-success"
+                role="status">
+
+            </div>
+
+            <p class="mt-3">
+
+                AI is identifying your food...
+
+            </p>
+
+        </section>
+
+
+        <!-- =====================================================
+             RESULTS
+        ====================================================== -->
+
+        <section
+            id="resultsSection"
+            style="display:none;"
+            class="results-section mt-5">
+
+
+            <div class="result-card">
+
+                <span class="small-badge">
+
+                    <i class="fa-solid fa-circle-check"></i>
+
+                    DISH IDENTIFIED
+
+                </span>
+
+
+                <h2 id="bestDishTitle">
+                    Food Identified
+                </h2>
+
+
+                <h5 id="bestVarietySubtitle">
+                </h5>
+
+
+                <p id="bestDishDesc">
+                    Recipe identified successfully.
+                </p>
+
+
+                <!-- Top predictions -->
+
+                <div class="mt-4">
+
+                    <h5>
+                        <i class="fa-solid fa-chart-simple"></i>
+                        Top Matches
+                    </h5>
+
+
+                    <div id="topDishesList">
+                    </div>
+
+                </div>
+
+
+                <!-- View recipe -->
+
+                <div class="mt-4">
+
+                    <a
+                        id="viewRecipeBtn"
+                        href="#"
+                        class="main-action-btn"
+                        style="display:none;">
+
+                        <i class="fa-solid fa-book-open"></i>
+
+                        View Recipe
+
+                    </a>
+
+
+                    <button
+                        type="button"
+                        id="tryAnotherBtn"
+                        class="health-action-btn">
+
+                        <i class="fa-solid fa-rotate"></i>
+
+                        Try Another
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </div>
+
+</main>
+
+
+<!-- =========================================================
+     CAMERA MODAL
+========================================================= -->
+
+<div
+    class="modal fade"
+    id="cameraModal"
+    tabindex="-1">
+
+    <div class="modal-dialog modal-dialog-centered">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h5 class="modal-title">
+
+                    <i class="fa-solid fa-camera"></i>
+
+                    Capture Food Image
+
+                </h5>
+
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal">
+
+                </button>
+
+            </div>
+
+
+            <div class="modal-body text-center">
+
+                <video
+                    id="cameraVideo"
+                    autoplay
+                    playsinline
+                    style="
+                        width:100%;
+                        border-radius:12px;
+                    ">
+                </video>
+
+
+                <canvas
+                    id="cameraCanvas"
+                    style="display:none;">
+                </canvas>
+
+            </div>
+
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn btn-success"
+                    id="takeSnapshotBtn">
+
+                    <i class="fa-solid fa-camera"></i>
+
+                    Capture
+
+                </button>
+
+            </div>
 
         </div>
 
     </div>
 
-</main>
+</div>
+
+
+<!-- Bootstrap -->
+
+<script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
+</script>
+
+
+<!-- =========================================================
+     DIRECT UPLOAD SCRIPT
+========================================================= -->
+
+<script>
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    console.log("====================================");
+    console.log("SMART RECIPE FINDER UPLOAD PAGE");
+    console.log("====================================");
+
+
+    const fileInput =
+        document.getElementById("foodImageInput");
+
+    const chooseFileBtn =
+        document.getElementById("chooseFileBtn");
+
+    const preview =
+        document.getElementById("activeImagePreview");
+
+    const emptyPreview =
+        document.getElementById("emptyPreviewBox");
+
+    const resultsSection =
+        document.getElementById("resultsSection");
+
+    const loadingSection =
+        document.getElementById("loadingSection");
+
+    const bestDishTitle =
+        document.getElementById("bestDishTitle");
+
+    const bestVarietySubtitle =
+        document.getElementById("bestVarietySubtitle");
+
+    const bestDishDesc =
+        document.getElementById("bestDishDesc");
+
+    const topDishesList =
+        document.getElementById("topDishesList");
+
+    const viewRecipeBtn =
+        document.getElementById("viewRecipeBtn");
+
+    const tryAnotherBtn =
+        document.getElementById("tryAnotherBtn");
+
+
+    console.log("fileInput:", fileInput);
+
+    console.log("chooseFileBtn:", chooseFileBtn);
+
+
+    if (!fileInput || !chooseFileBtn) {
+
+        console.error(
+            "UPLOAD ERROR: Required elements missing."
+        );
+
+        return;
+    }
+
+
+    /* =========================================================
+       CHOOSE IMAGE
+    ========================================================= */
+
+    chooseFileBtn.addEventListener(
+        "click",
+        function () {
+
+            console.log(
+                "[UPLOAD] Choose Image clicked."
+            );
+
+            fileInput.click();
+
+        }
+    );
+
+
+    /* =========================================================
+       IMAGE SELECTED
+    ========================================================= */
+
+    fileInput.addEventListener(
+        "change",
+        function () {
+
+            console.log(
+                "[UPLOAD] File change detected."
+            );
+
+
+            const file =
+                fileInput.files[0];
+
+
+            if (!file) {
+
+                console.log(
+                    "[UPLOAD] No file selected."
+                );
+
+                return;
+            }
+
+
+            console.log(
+                "[UPLOAD] file selected:",
+                file
+            );
+
+            console.log(
+                "[UPLOAD] Selected file:",
+                file.name
+            );
+
+            console.log(
+                "[UPLOAD] File type:",
+                file.type
+            );
+
+            console.log(
+                "[UPLOAD] File size:",
+                file.size
+            );
+
+            /* Preview */
+            const imageURL =
+                URL.createObjectURL(file);
+
+            preview.src =
+                imageURL;
+
+            preview.style.display =
+                "block";
+
+            if (emptyPreview) {
+                emptyPreview.style.display =
+                    "none";
+            }
+
+            /* Send to backend */
+            classifyImage(file);
+        }
+    );
+
+    /* =========================================================
+       CLASSIFY IMAGE
+    ========================================================= */
+
+    function classifyImage(file) {
+
+        console.log(
+            "[UPLOAD] sending /api/classify"
+        );
+
+
+        loadingSection.style.display =
+            "block";
+
+
+        resultsSection.style.display =
+            "none";
+
+
+        const formData =
+            new FormData();
+
+
+        formData.append(
+            "food_image",
+            file
+        );
+
+
+        fetch(
+            "/api/classify",
+            {
+                method: "POST",
+                body: formData
+            }
+        )
+
+        .then(
+            async function (response) {
+
+                console.log(
+                    "[API] Response status:",
+                    response.status
+                );
+
+
+                const data =
+                    await response.json();
+
+
+                console.log(
+                    "[API] Response data:",
+                    data
+                );
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        data.error ||
+                        data.message ||
+                        "Classification failed."
+                    );
+
+                }
+
+
+                return data;
+
+            }
+        )
+
+        .then(
+            function (data) {
+
+                loadingSection.style.display =
+                    "none";
+
+
+                displayResults(data);
+
+            }
+        )
+
+        .catch(
+            function (error) {
+
+                loadingSection.style.display =
+                    "none";
+
+
+                console.error(
+                    "[API ERROR]",
+                    error
+                );
+
+
+                alert(
+                    "Error while identifying food:\n\n" +
+                    error.message
+                );
+
+            }
+        );
+
+    }
+
+
+    /* =========================================================
+       DISPLAY RESULTS
+    ========================================================= */
+
+    function displayResults(data) {
+
+        console.log(
+            "[UPLOAD] response:",
+            data
+        );
+
+        const dish =
+            data.best_dish ||
+            data.predicted_dish ||
+            "Food Identified";
+
+        const variety =
+            data.predicted_variety ||
+            "";
+
+        const confidence =
+            data.confidence_percent ||
+            0;
+
+        bestDishTitle.textContent =
+            dish;
+
+        if (variety) {
+            const formattedVariety = variety.replace(/\b\w/g, function (l) { return l.toUpperCase(); });
+            bestVarietySubtitle.innerHTML =
+                "Predicted Variety: <strong>" +
+                escapeHTML(formattedVariety) +
+                "</strong> (" +
+                confidence +
+                "% confidence)";
+        } else {
+            bestVarietySubtitle.textContent =
+                "Identified Dish: " + dish;
+        }
+
+        bestDishDesc.textContent =
+            data.description ||
+            "Recipe identified successfully.";
+
+        /* Top dishes */
+        topDishesList.innerHTML =
+            "";
+
+        const topDishes =
+            data.top_dishes ||
+            [];
+
+        topDishes.forEach(
+            function (item, index) {
+                const name =
+                    item.name ||
+                    item.raw_name ||
+                    "Unknown";
+
+                const matchPct =
+                    item.match_percent ||
+                    item.confidence_percent ||
+                    0;
+
+                const cardDiv =
+                    document.createElement("div");
+
+                cardDiv.className =
+                    "dish-match-card mb-2" + (index === 0 ? " active" : "");
+
+                cardDiv.innerHTML =
+                    '<div class="dish-match-header">' +
+                    '<span class="dish-match-title">' +
+                    '<i class="fa-solid fa-utensils text-success me-2"></i> ' +
+                    escapeHTML(name) +
+                    '</span>' +
+                    '<span class="dish-match-percent">' +
+                    matchPct +
+                    '% Match</span>' +
+                    '</div>' +
+                    '<div class="dish-match-progress">' +
+                    '<div class="dish-match-progress-bar" style="width: ' +
+                    Math.min(100, Math.max(10, matchPct)) +
+                    '%;"></div>' +
+                    '</div>';
+
+                topDishesList.appendChild(
+                    cardDiv
+                );
+            }
+        );
+
+        /* Recipe URL with dish, variety, user_image, and top_predictions */
+        const userImgUrl =
+            data.user_image_url ||
+            "";
+
+        const topPredictionsJson =
+            JSON.stringify(topDishes);
+
+        viewRecipeBtn.href =
+            "/recipe?dish=" +
+            encodeURIComponent(dish) +
+            "&variety=" +
+            encodeURIComponent(variety) +
+            "&user_image=" +
+            encodeURIComponent(userImgUrl) +
+            "&top_predictions=" +
+            encodeURIComponent(topPredictionsJson);
+
+        viewRecipeBtn.style.display =
+            "inline-flex";
+
+        resultsSection.style.display =
+            "block";
+
+        resultsSection.scrollIntoView(
+            {
+                behavior: "smooth"
+            }
+        );
+
+        /* Interactive Top Dish Card Click */
+        document.querySelectorAll(".dish-match-card").forEach(function (card) {
+            card.addEventListener("click", function () {
+                document.querySelectorAll(".dish-match-card").forEach(function (c) {
+                    c.classList.remove("active");
+                });
+                card.classList.add("active");
+
+                const clickedTitleEl = card.querySelector(".dish-match-title");
+                const clickedName = clickedTitleEl ? clickedTitleEl.textContent.trim() : "";
+                if (clickedName) {
+                    bestDishTitle.textContent = clickedName;
+                    bestVarietySubtitle.textContent = "Selected: " + clickedName;
+
+                    viewRecipeBtn.href =
+                        "/recipe?dish=" +
+                        encodeURIComponent(clickedName) +
+                        "&variety=" +
+                        encodeURIComponent("") +
+                        "&user_image=" +
+                        encodeURIComponent(userImgUrl) +
+                        "&top_predictions=" +
+                        encodeURIComponent(topPredictionsJson);
+                }
+            });
+        });
+
+    }
+
+
+    /* =========================================================
+       TRY ANOTHER
+    ========================================================= */
+
+    tryAnotherBtn.addEventListener(
+        "click",
+        function () {
+
+            fileInput.value =
+                "";
+
+            resultsSection.style.display =
+                "none";
+
+
+            preview.style.display =
+                "none";
+
+
+            if (emptyPreview) {
+
+                emptyPreview.style.display =
+                    "block";
+
+            }
+
+
+            fileInput.click();
+
+        }
+    );
+
+
+    /* =========================================================
+       HTML ESCAPE
+    ========================================================= */
+
+    function escapeHTML(value) {
+
+        const div =
+            document.createElement("div");
+
+
+        div.textContent =
+            value == null
+                ? ""
+                : String(value);
+
+
+        return div.innerHTML;
+
+    }
+
+
+    /* =========================================================
+       CAMERA
+    ========================================================= */
+
+    const cameraModeBtn =
+        document.getElementById(
+            "cameraModeBtn"
+        );
+
+
+    const cameraModalElement =
+        document.getElementById(
+            "cameraModal"
+        );
+
+
+    const cameraVideo =
+        document.getElementById(
+            "cameraVideo"
+        );
+
+
+    const cameraCanvas =
+        document.getElementById(
+            "cameraCanvas"
+        );
+
+
+    const takeSnapshotBtn =
+        document.getElementById(
+            "takeSnapshotBtn"
+        );
+
+
+    let cameraStream =
+        null;
+
+
+    let cameraModal =
+        null;
+
+
+    if (
+        cameraModalElement &&
+        typeof bootstrap !== "undefined"
+    ) {
+
+        cameraModal =
+            bootstrap.Modal
+                .getOrCreateInstance(
+                    cameraModalElement
+                );
+
+    }
+
+
+    if (cameraModeBtn) {
+
+        cameraModeBtn.addEventListener(
+            "click",
+            async function () {
+
+                console.log(
+                    "[CAMERA] Opening camera."
+                );
+
+
+                try {
+
+                    cameraStream =
+                        await navigator.mediaDevices
+                            .getUserMedia(
+                                {
+                                    video: true,
+                                    audio: false
+                                }
+                            );
+
+
+                    cameraVideo.srcObject =
+                        cameraStream;
+
+
+                    if (cameraModal) {
+
+                        cameraModal.show();
+
+                    }
+
+                }
+
+                catch (error) {
+
+                    console.error(
+                        "[CAMERA ERROR]",
+                        error
+                    );
+
+
+                    alert(
+                        "Camera could not be opened.\n\n" +
+                        error.message
+                    );
+
+                }
+
+            }
+        );
+
+    }
+
+
+    if (takeSnapshotBtn) {
+
+        takeSnapshotBtn.addEventListener(
+            "click",
+            function () {
+
+                if (!cameraStream) {
+
+                    return;
+
+                }
+
+
+                cameraCanvas.width =
+                    cameraVideo.videoWidth;
+
+
+                cameraCanvas.height =
+                    cameraVideo.videoHeight;
+
+
+                const context =
+                    cameraCanvas.getContext(
+                        "2d"
+                    );
+
+
+                context.drawImage(
+                    cameraVideo,
+                    0,
+                    0,
+                    cameraCanvas.width,
+                    cameraCanvas.height
+                );
+
+
+                cameraCanvas.toBlob(
+                    function (blob) {
+
+                        const file =
+                            new File(
+                                [blob],
+                                "camera_food.jpg",
+                                {
+                                    type:
+                                        "image/jpeg"
+                                }
+                            );
+
+
+                        if (cameraStream) {
+
+                            cameraStream
+                                .getTracks()
+                                .forEach(
+                                    function (track) {
+                                        track.stop();
+                                    }
+                                );
+
+                            cameraStream =
+                                null;
+
+                        }
+
+
+                        if (cameraModal) {
+
+                            cameraModal.hide();
+
+                        }
+
+
+                        /* Preview */
+
+                        preview.src =
+                            URL.createObjectURL(
+                                file
+                            );
+
+
+                        preview.style.display =
+                            "block";
+
+
+                        if (emptyPreview) {
+
+                            emptyPreview.style.display =
+                                "none";
+
+                        }
+
+
+                        classifyImage(file);
+
+                    },
+                    "image/jpeg",
+                    0.9
+                );
+
+            }
+        );
+
+    }
+
+
+});
+
+</script>
+
 
 </body>
 </html>

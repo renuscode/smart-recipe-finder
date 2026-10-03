@@ -1058,3 +1058,481 @@ a {
         justify-content: center;
     }
 }
+
+
+/* =========================================================
+   SCANNER & VIEWFINDER (Matching ui design.png)
+========================================================= */
+
+.scanner-container {
+    height: 285px;
+    border-radius: 17px;
+    background: #f7faf5;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed #cbdcc9;
+}
+
+.scanner-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 15px;
+    display: block;
+}
+
+.viewfinder-corner {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-color: #38a554;
+    border-width: 3.5px;
+    border-style: solid;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.viewfinder-corner.top-left {
+    top: 14px;
+    left: 14px;
+    border-right: none;
+    border-bottom: none;
+    border-top-left-radius: 7px;
+}
+
+.viewfinder-corner.top-right {
+    top: 14px;
+    right: 14px;
+    border-left: none;
+    border-bottom: none;
+    border-top-right-radius: 7px;
+}
+
+.viewfinder-corner.bottom-left {
+    bottom: 14px;
+    left: 14px;
+    border-right: none;
+    border-top: none;
+    border-bottom-left-radius: 7px;
+}
+
+.viewfinder-corner.bottom-right {
+    bottom: 14px;
+    right: 14px;
+    border-left: none;
+    border-top: none;
+    border-bottom-right-radius: 7px;
+}
+
+.scan-laser-line {
+    position: absolute;
+    left: 4%;
+    width: 92%;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, #28c757, #6af088, #28c757, transparent);
+    box-shadow: 0 0 12px #34d058, 0 0 20px #34d058;
+    z-index: 8;
+    animation: scanPulse 2.2s infinite ease-in-out;
+}
+
+@keyframes scanPulse {
+    0% {
+        top: 12%;
+        opacity: 0.6;
+    }
+    50% {
+        top: 86%;
+        opacity: 1;
+    }
+    100% {
+        top: 12%;
+        opacity: 0.6;
+    }
+}
+
+.camera-overlay-frame {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    bottom: 20px;
+    pointer-events: none;
+}
+
+
+/* =========================================================
+   TOP DISHES & RESULTS MATCH (Matching ui design.png)
+========================================================= */
+
+.dish-match-card {
+    background: white;
+    border: 1.5px solid #e7efe6;
+    border-radius: 16px;
+    padding: 16px 20px;
+    transition: 0.25s;
+    cursor: pointer;
+}
+
+.dish-match-card:hover,
+.dish-match-card.active {
+    background: #f6fcf6;
+    border-color: #42a85f;
+    box-shadow: 0 8px 22px rgba(45, 125, 65, 0.09);
+    transform: translateY(-2px);
+}
+
+.dish-match-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.dish-match-title {
+    color: #24472c;
+    font-weight: 750;
+    font-size: 16px;
+}
+
+.dish-match-percent {
+    color: #2b7e43;
+    font-weight: 800;
+    font-size: 14px;
+}
+
+.dish-match-progress {
+    height: 7px;
+    background: #e6efe5;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.dish-match-progress-bar {
+    height: 100%;
+    border-radius: 10px;
+    background: linear-gradient(90deg, #44a860, #20793e);
+    transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* =========================================================
+   FLASHCARDS & SEARCH (Fallback / Alternative Dishes)
+========================================================= */
+
+.flashcard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 18px;
+    margin-top: 15px;
+}
+
+.flashcard-link {
+    text-decoration: none !important;
+    color: inherit !important;
+    display: block;
+}
+
+.flashcard {
+    background: white;
+    border-radius: 18px;
+    border: 1px solid #e7efe6;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(45, 80, 50, 0.06);
+    transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.flashcard:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 32px rgba(45, 120, 60, 0.14);
+    border-color: #42a85f;
+}
+
+.flashcard-img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    display: block;
+}
+
+.flashcard-img-placeholder {
+    width: 100%;
+    height: 140px;
+    background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #388e3c;
+    font-size: 38px;
+}
+
+.flashcard-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.flashcard-name {
+    font-weight: 750;
+    color: #24472c;
+    font-size: 15px;
+    line-height: 1.35;
+    margin-bottom: 6px;
+}
+
+.flashcard-confidence {
+    margin-bottom: 6px;
+}
+
+.flashcard-pct {
+    display: inline-block;
+    background: #e8f5e9;
+    color: #2e7d32;
+    font-size: 11px;
+    font-weight: 750;
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+
+.flashcard-meta {
+    font-size: 12px;
+    color: #7b887f;
+    margin-bottom: 12px;
+    flex-grow: 1;
+}
+
+.flashcard-btn {
+    display: inline-block;
+    text-align: center;
+    background: #eef7ee;
+    color: #287d43;
+    font-size: 12px;
+    font-weight: 750;
+    padding: 8px 14px;
+    border-radius: 10px;
+    transition: 0.2s;
+}
+
+.flashcard:hover .flashcard-btn {
+    background: #287d43;
+    color: white;
+}
+
+/* =========================================================
+   RECIPE SEARCH BAR
+========================================================= */
+
+.recipe-search-section {
+    background: white;
+    border: 1px solid #e7efe6;
+    border-radius: 20px;
+    padding: 24px;
+    margin: 25px 0;
+    box-shadow: 0 8px 25px rgba(40, 70, 45, 0.05);
+}
+
+.recipe-search-bar {
+    display: flex;
+    gap: 10px;
+}
+
+.recipe-search-input {
+    flex: 1;
+    border: 1.5px solid #d5e2d3;
+    border-radius: 12px;
+    padding: 12px 18px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.recipe-search-input:focus {
+    border-color: #38a554;
+    box-shadow: 0 0 0 3px rgba(56, 165, 84, 0.15);
+}
+
+.recipe-search-submit {
+    background: linear-gradient(135deg, #42a95d, #24783e);
+    color: white;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.recipe-search-submit:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(40, 120, 60, 0.25);
+}
+
+/* =========================================================
+   FLOATING COOKING ASSISTANT CHATBOT
+========================================================= */
+
+.chat-toggle-btn {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3aa858, #1f773a);
+    color: white;
+    border: none;
+    box-shadow: 0 10px 25px rgba(35, 120, 58, 0.35);
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.25s, box-shadow 0.25s;
+}
+
+.chat-toggle-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 14px 30px rgba(35, 120, 58, 0.45);
+}
+
+.chat-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #ff9800;
+    color: white;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 5px;
+    border-radius: 8px;
+    letter-spacing: 0.5px;
+}
+
+.chat-widget {
+    position: fixed;
+    bottom: 100px;
+    right: 28px;
+    width: 370px;
+    max-width: calc(100vw - 40px);
+    height: 480px;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(30, 60, 40, 0.20);
+    border: 1px solid #e2ece0;
+    display: flex;
+    flex-direction: column;
+    z-index: 1040;
+    overflow: hidden;
+}
+
+.chat-widget-header {
+    background: linear-gradient(135deg, #2b7d44, #1f6434);
+    color: white;
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 15px;
+}
+
+.chat-close-btn {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+    opacity: 0.85;
+}
+
+.chat-close-btn:hover {
+    opacity: 1;
+}
+
+.chat-messages {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #fbfdfa;
+}
+
+.chat-bubble {
+    max-width: 82%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.bot-bubble {
+    background: #eef5ed;
+    color: #233e29;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+    border: 1px solid #e1ece0;
+}
+
+.user-bubble {
+    background: linear-gradient(135deg, #3aa858, #237a3e);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+
+.typing-indicator {
+    font-style: italic;
+    color: #6d7d71;
+}
+
+.chat-input-area {
+    display: flex;
+    padding: 10px 14px;
+    border-top: 1px solid #e5eee3;
+    background: white;
+    gap: 8px;
+}
+
+.chat-input {
+    flex: 1;
+    border: 1px solid #d2e0d0;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+    outline: none;
+}
+
+.chat-input:focus {
+    border-color: #38a554;
+}
+
+.chat-send-btn {
+    background: #287d43;
+    color: white;
+    border: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.2s;
+}
+
+.chat-send-btn:hover {
+    background: #1f6434;
+}

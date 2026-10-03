@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Recipe Finder | Create Account</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<!-- =========================================================
+     NAVBAR
+========================================================= -->
+<nav class="navbar custom-navbar">
+    <div class="container">
+        <a class="navbar-brand logo-area" href="{{ url_for('home_page') }}">
+            <div class="logo-circle">
+                <i class="fa-solid fa-utensils"></i>
+            </div>
+            <span>Smart Recipe Finder</span>
+        </a>
+
+        <div class="navbar-links">
+            <a class="nav-link" href="{{ url_for('home_page') }}">
+                <i class="fa-solid fa-house"></i>
+                Home
+            </a>
+            <a class="nav-link" href="{{ url_for('login_page') }}">
+                <i class="fa-solid fa-right-to-bracket"></i>
+                Login
+            </a>
+            <a class="nav-link active" href="{{ url_for('signup_page') }}">
+                <i class="fa-solid fa-user-plus"></i>
+                Sign Up
+            </a>
+        </div>
+    </div>
+</nav>
+
+
+<!-- =========================================================
+     SIGN UP CARD
+========================================================= -->
+<main class="upload-page">
+    <div class="container">
+
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+
+                <div class="upload-card" style="grid-template-columns: 1fr; padding: 40px 35px;">
+
+                    <div class="text-center mb-4">
+                        <div class="upload-icon-large mx-auto mb-3" style="background: linear-gradient(135deg, #389e57, #1e6e3c);">
+                            <i class="fa-solid fa-user-plus"></i>
+                        </div>
+                        <h2 style="font-size: 28px; color: #24472c; font-weight: 800;">Create Your Account</h2>
+                        <p style="color: #78837b; font-size: 14px;">Join Smart Recipe Finder to start discovering delicious dishes</p>
+                    </div>
+
+                    <!-- Server Error Alert -->
+                    {% if error %}
+                        <div class="alert alert-danger d-flex align-items-center mb-4" role="alert" style="border-radius: 12px; font-size: 14px;">
+                            <i class="fa-solid fa-circle-exclamation me-2"></i>
+                            <div>{{ error }}</div>
+                        </div>
+                    {% endif %}
+
+                    <!-- Client Error Alert (via jQuery/JS) -->
+                    <div id="signupClientAlert" class="alert alert-danger d-none align-items-center mb-4" role="alert" style="border-radius: 12px; font-size: 14px;">
+                        <i class="fa-solid fa-circle-exclamation me-2"></i>
+                        <span id="signupAlertMessage"></span>
+                    </div>
+
+                    <!-- Sign Up Form -->
+                    <form id="signupForm" method="POST" action="{{ url_for('signup_page') }}" novalidate>
+
+                        <!-- Email ID -->
+                        <div class="mb-3 text-start">
+                            <label for="email" class="form-label" style="font-weight: 700; color: #324e39; font-size: 14px;">
+                                <i class="fa-regular fa-envelope me-1 text-success"></i> Email ID
+                            </label>
+                            <input
+                                type="email"
+                                class="form-control"
+                                id="email"
+                                name="email"
+                                value="{{ email }}"
+                                placeholder="name@example.com"
+                                style="border-radius: 12px; padding: 12px 16px; border: 1.5px solid #d5e4d3;"
+                                required>
+                            <div class="invalid-feedback" id="emailFeedback">
+                                Please enter a valid email address.
+                            </div>
+                        </div>
+
+                        <!-- Password -->
+                        <div class="mb-3 text-start">
+                            <label for="password" class="form-label" style="font-weight: 700; color: #324e39; font-size: 14px;">
+                                <i class="fa-solid fa-lock me-1 text-success"></i> Password
+                            </label>
+                            <div class="position-relative">
+                                <input
+                                    type="password"
+                                    class="form-control"
+                                    id="password"
+                                    name="password"
+                                    placeholder="At least 8 characters"
+                                    style="border-radius: 12px; padding: 12px 42px 12px 16px; border: 1.5px solid #d5e4d3;"
+                                    required>
+                                <button
+                                    type="button"
+                                    class="btn position-absolute top-50 end-0 translate-middle-y text-muted border-0 bg-transparent"
+                                    id="togglePassword"
+                                    style="padding-right: 14px;"
+                                    aria-label="Toggle password visibility">
+                                    <i class="fa-regular fa-eye" id="togglePasswordIcon"></i>
+                                </button>
+                            </div>
+                            <div class="invalid-feedback" id="passwordFeedback">
+                                Password must contain at least 8 characters.
+                            </div>
+                        </div>
+
+                        <!-- Confirm Password -->
+                        <div class="mb-4 text-start">
+                            <label for="confirm_password" class="form-label" style="font-weight: 700; color: #324e39; font-size: 14px;">
+                                <i class="fa-solid fa-shield-halved me-1 text-success"></i> Confirm Password
+                            </label>
+                            <div class="position-relative">
+                                <input
+                                    type="password"
+                                    class="form-control"
+                                    id="confirm_password"
+                                    name="confirm_password"
+                                    placeholder="Re-enter your password"
+                                    style="border-radius: 12px; padding: 12px 42px 12px 16px; border: 1.5px solid #d5e4d3;"
+                                    required>
+                                <button
+                                    type="button"
+                                    class="btn position-absolute top-50 end-0 translate-middle-y text-muted border-0 bg-transparent"
+                                    id="toggleConfirmPassword"
+                                    style="padding-right: 14px;"
+                                    aria-label="Toggle confirm password visibility">
+                                    <i class="fa-regular fa-eye" id="toggleConfirmPasswordIcon"></i>
+                                </button>
+                            </div>
+                            <div class="invalid-feedback" id="confirmFeedback">
+                                Passwords do not match.
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid mb-3">
+                            <button type="submit" class="main-action-btn justify-content-center" style="border: none; width: 100%;">
+                                <i class="fa-solid fa-check"></i>
+                                Create Account
+                            </button>
+                        </div>
+
+                        <!-- Switch to Login -->
+                        <div class="text-center mt-3" style="font-size: 14px; color: #6f7f74;">
+                            Already have an account?
+                            <a href="{{ url_for('login_page') }}" style="color: #267c40; font-weight: 700; text-decoration: underline;">
+                                Login
+                            </a>
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<!-- jQuery & Bootstrap -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Sign Up Validation Script -->
+<script>
+$(document).ready(function() {
+    // Password toggles
+    $('#togglePassword').on('click', function() {
+        const pass = $('#password');
+        const icon = $('#togglePasswordIcon');
+        if (pass.attr('type') === 'password') {
+            pass.attr('type', 'text');
+            icon.removeClass('fa-eye').addClass('fa-eye-slash');
+        } else {
+            pass.attr('type', 'password');
+            icon.removeClass('fa-eye-slash').addClass('fa-eye');
+        }
+    });
+
+    $('#toggleConfirmPassword').on('click', function() {
+        const pass = $('#confirm_password');
+        const icon = $('#toggleConfirmPasswordIcon');
+        if (pass.attr('type') === 'password') {
+            pass.attr('type', 'text');
+            icon.removeClass('fa-eye').addClass('fa-eye-slash');
+        } else {
+            pass.attr('type', 'password');
+            icon.removeClass('fa-eye-slash').addClass('fa-eye');
+        }
+    });
+
+    // Frontend Form Validation
+    $('#signupForm').on('submit', function(e) {
+        const email = $('#email').val().trim();
+        const password = $('#password').val();
+        const confirmPassword = $('#confirm_password').val();
+        const alertBox = $('#signupClientAlert');
+        const alertMsg = $('#signupAlertMessage');
+        const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+
+        let hasError = false;
+        let errorMessage = "";
+
+        // Reset
+        $('#email, #password, #confirm_password').removeClass('is-invalid');
+        alertBox.addClass('d-none');
+
+        if (!email) {
+            hasError = true;
+            errorMessage = "Email ID cannot be empty.";
+            $('#email').addClass('is-invalid');
+        } else if (!emailRegex.test(email)) {
+            hasError = true;
+            errorMessage = "Please enter a valid email address.";
+            $('#email').addClass('is-invalid');
+        } else if (!password || !password.trim()) {
+            hasError = true;
+            errorMessage = "Password cannot be empty.";
+            $('#password').addClass('is-invalid');
+        } else if (password.length < 8) {
+            hasError = true;
+            errorMessage = "Password must contain at least 8 characters.";
+            $('#password').addClass('is-invalid');
+        } else if (password !== confirmPassword) {
+            hasError = true;
+            errorMessage = "Passwords do not match.";
+            $('#confirm_password').addClass('is-invalid');
+        }
+
+        if (hasError) {
+            e.preventDefault();
+            alertMsg.text(errorMessage);
+            alertBox.removeClass('d-none').addClass('d-flex');
+            return false;
+        }
+    });
+});
+</script>
+
+</body>
+</html>
