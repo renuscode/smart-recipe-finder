@@ -8,7 +8,7 @@ Features:
 - Camera image support
 - OpenCLIP food recognition
 - Recipe retrieval
-- SQLite database storage
+- MongoDB database storage
 - Recipe search
 - Optional cooking assistant
 """
@@ -124,7 +124,7 @@ def login_required(f):
 
 
 # ============================================================
-# HELPER: CONVERT DATA FOR SQLITE
+# HELPER: CONVERT DATA FOR DATABASE
 # ============================================================
 
 def convert_to_db_text(value):
@@ -218,10 +218,21 @@ def login_page():
 
     error_message = ""
 
+    username_value = ""
+
     email_value = ""
 
 
     if request.method == "POST":
+
+        # ----------------------------------------------------
+        # GET FORM VALUES
+        # ----------------------------------------------------
+
+        username = request.form.get(
+            "username",
+            ""
+        ).strip()
 
         email = request.form.get(
             "email",
@@ -233,6 +244,8 @@ def login_page():
             ""
         )
 
+        username_value = username
+
         email_value = email
 
 
@@ -240,7 +253,13 @@ def login_page():
         # VALIDATION
         # ----------------------------------------------------
 
-        if not email:
+        if not username:
+
+            error_message = (
+                "Username cannot be empty."
+            )
+
+        elif not email:
 
             error_message = (
                 "Email ID cannot be empty."
@@ -258,11 +277,16 @@ def login_page():
 
                 success, message, user_data = (
                     authenticate_user(
+                        username,
                         email,
                         password
                     )
                 )
 
+
+                # ------------------------------------------------
+                # LOGIN SUCCESS
+                # ------------------------------------------------
 
                 if success:
 
@@ -274,9 +298,20 @@ def login_page():
                         user_data["email"]
                     )
 
+                    session["user_name"] = (
+                        user_data.get(
+                            "user_name"
+                        )
+                    )
+
                     return redirect(
                         url_for("upload_page")
                     )
+
+
+                # ------------------------------------------------
+                # LOGIN FAILED
+                # ------------------------------------------------
 
                 else:
 
@@ -298,6 +333,7 @@ def login_page():
     return render_template(
         "login.html",
         error=error_message,
+        username=username_value,
         email=email_value,
         user=session.get(
             "user_email"
@@ -323,10 +359,21 @@ def signup_page():
 
     error_message = ""
 
+    username_value = ""
+
     email_value = ""
 
 
     if request.method == "POST":
+
+        # ----------------------------------------------------
+        # GET FORM VALUES
+        # ----------------------------------------------------
+
+        username = request.form.get(
+            "username",
+            ""
+        ).strip()
 
         email = request.form.get(
             "email",
@@ -343,6 +390,8 @@ def signup_page():
             ""
         )
 
+        username_value = username
+
         email_value = email
 
 
@@ -350,12 +399,17 @@ def signup_page():
 
             success, message, user_id = (
                 register_user(
+                    username,
                     email,
                     password,
                     confirm_password
                 )
             )
 
+
+            # ------------------------------------------------
+            # SIGNUP SUCCESS
+            # ------------------------------------------------
 
             if success:
 
@@ -367,9 +421,18 @@ def signup_page():
                     email.lower()
                 )
 
+                session["user_name"] = (
+                    username.lower()
+                )
+
                 return redirect(
                     url_for("upload_page")
                 )
+
+
+            # ------------------------------------------------
+            # SIGNUP FAILED
+            # ------------------------------------------------
 
             else:
 
@@ -391,6 +454,7 @@ def signup_page():
     return render_template(
         "signup.html",
         error=error_message,
+        username=username_value,
         email=email_value,
         user=session.get(
             "user_email"
@@ -1135,7 +1199,11 @@ def api_classify():
                 )
             )
 
-            if description is None or str(description).strip().lower() == "nan":
+            if (
+                description is None
+                or str(description).strip().lower() == "nan"
+            ):
+
                 description = ""
 
 
@@ -1380,6 +1448,13 @@ def api_classify():
 
 
     # ========================================================
+    # MARK RECIPE AS READY AFTER SUCCESSFUL CLASSIFICATION
+    # ========================================================
+
+    session["recipe_ready"] = True
+
+
+    # ========================================================
     # BUILD RESPONSE
     # ========================================================
 
@@ -1556,6 +1631,7 @@ def recipe_page():
         dish = "Dosa"
 
         if not variety:
+
             variety = "plain dosa"
 
 
@@ -1988,4 +2064,3 @@ if __name__ == "__main__":
 
         debug=False
     )
-

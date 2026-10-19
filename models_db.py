@@ -3,21 +3,38 @@ models_db.py
 Database and User Authentication Module for Smart Recipe Finder.
 
 Uses:
-- SQLite
+- MongoDB Atlas
+- PyMongo
 - Werkzeug password hashing
 
-Database tables:
+MongoDB collections:
 - users
 - images
 - dishes
 - recipes
 - alt_ingredients
+- counters
+
+Authentication:
+Signup:
+- Username
+- Email
+- Password
+- Confirm Password
+
+Login:
+- Email
+- Username
+- Password
 """
 
 import os
 import re
-import sqlite3
 from datetime import datetime
+
+from dotenv import load_dotenv
+from pymongo import MongoClient, ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from werkzeug.security import (
     generate_password_hash,
@@ -26,22 +43,70 @@ from werkzeug.security import (
 
 
 # ============================================================
-# DATABASE PATH
+# LOAD ENVIRONMENT VARIABLES
 # ============================================================
 
 BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
 
-INSTANCE_DIR = os.path.join(
+ENV_PATH = os.path.join(
     BASE_DIR,
-    "instance"
+    ".env"
 )
 
-DB_PATH = os.path.join(
-    INSTANCE_DIR,
-    "recipe_finder.db"
+load_dotenv(ENV_PATH)
+
+
+# ============================================================
+# MONGODB CONFIGURATION
+# ============================================================
+
+MONGODB_URI = os.getenv(
+    "MONGODB_URI"
 )
+
+if not MONGODB_URI:
+    raise RuntimeError(
+        "MONGODB_URI is not set in the .env file."
+    )
+
+
+MONGODB_DATABASE = os.getenv(
+    "MONGODB_DATABASE",
+    "smart_recipe_finder"
+)
+
+
+# ============================================================
+# MONGODB CONNECTION
+# ============================================================
+
+client = MongoClient(
+    MONGODB_URI,
+    serverSelectionTimeoutMS=10000
+)
+
+db = client[MONGODB_DATABASE]
+
+
+# ============================================================
+# COLLECTIONS
+# ============================================================
+
+users_collection = db["users"]
+
+dishes_collection = db["dishes"]
+
+images_collection = db["images"]
+
+recipes_collection = db["recipes"]
+
+alt_ingredients_collection = db[
+    "alt_ingredients"
+]
+
+counters_collection = db["counters"]
 
 
 # ============================================================
@@ -54,38 +119,12 @@ EMAIL_REGEX = re.compile(
 
 
 # ============================================================
-# DATABASE CONNECTION
+# USERNAME VALIDATION
 # ============================================================
 
-def get_db_connection():
-    """
-    Create and return a SQLite database connection.
-
-    Foreign keys are enabled for:
-
-        users -> images
-        dishes -> images
-        dishes -> recipes
-        recipes -> alt_ingredients
-    """
-
-    os.makedirs(
-        INSTANCE_DIR,
-        exist_ok=True
-    )
-
-    conn = sqlite3.connect(
-        DB_PATH
-    )
-
-    conn.row_factory = sqlite3.Row
-
-    # Enable foreign keys
-    conn.execute(
-        "PRAGMA foreign_keys = ON"
-    )
-
-    return conn
+USERNAME_REGEX = re.compile(
+    r"^[a-zA-Z0-9_]+$"
+)
 
 
 # ============================================================
@@ -94,118 +133,145 @@ def get_db_connection():
 
 def init_db():
     """
-    Create required tables if they do not already exist.
+    Initialize MongoDB collections and indexes.
 
-    IMPORTANT:
-    This function does NOT insert sample/default data.
+    MongoDB creates collections automatically when data
+    is inserted.
 
-    The current dishes table DOES NOT contain a 'type' column.
+    Indexes are created for:
+    - unique email addresses
+    - unique usernames
+    - dish searching
+    - recipe searching
+    - image searching
+    - alternative ingredients
     """
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    # --------------------------------------------------------
+    # USERS
+    # --------------------------------------------------------
 
-    # ========================================================
-    # USERS TABLE
-    # ========================================================
+    users_collection.create_index(
+        "email",
+        unique=True
+    )
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    users_collection.create_index(
+        "user_name_normalized",
+        unique=True,
+        sparse=True
+    )
 
-    # ========================================================
-    # ADD user_name IF IT DOES NOT EXIST
-    # ========================================================
+    # --------------------------------------------------------
+    # DISHES
+    # --------------------------------------------------------
 
-    columns = [
-        row["name"]
-        for row in cursor.execute(
-            "PRAGMA table_info(users)"
-        ).fetchall()
-    ]
+    dishes_collection.create_index(
+        "dish_name_normalized"
+    )
 
-    if "user_name" not in columns:
+    # --------------------------------------------------------
+    # RECIPES
+    # --------------------------------------------------------
 
-        cursor.execute("""
-            ALTER TABLE users
-            ADD COLUMN user_name TEXT
-        """)
+    recipes_collection.create_index(
+        [
+            ("dish_id", 1),
+            ("recipe_name_normalized", 1)
+        ]
+    )
 
-    # ========================================================
-    # DISHES TABLE
-    # ========================================================
+    # --------------------------------------------------------
+    # IMAGES
+    # --------------------------------------------------------
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS dishes (
-            dish_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            dish_name TEXT,
-            description TEXT,
-            cuisine TEXT,
-            course TEXT
-        )
-    """)
+    images_collection.create_index(
+        "user_id"
+    )
 
-    # ========================================================
-    # IMAGES TABLE
-    # ========================================================
+    images_collection.create_index(
+        "dish_id"
+    )
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS images (
-            image_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            input_type TEXT,
-            image_available INTEGER,
-            image_path TEXT,
-            dish_id INTEGER,
+    # --------------------------------------------------------
+    # ALTERNATIVE INGREDIENTS
+    # --------------------------------------------------------
 
-            FOREIGN KEY (user_id)
-                REFERENCES users(id),
+    alt_ingredients_collection.create_index(
+        "recipe_id"
+    )
 
-            FOREIGN KEY (dish_id)
-                REFERENCES dishes(dish_id)
-        )
-    """)
+    # --------------------------------------------------------
+    # TEST MONGODB CONNECTION
+    # --------------------------------------------------------
 
-    # ========================================================
-    # RECIPES TABLE
-    # ========================================================
+    client.admin.command("ping")
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS recipes (
-            recipe_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            dish_id INTEGER,
-            recipe_name TEXT,
-            ingredients TEXT,
-            instruction TEXT,
-            prepare_time TEXT,
+    print(
+        "[MongoDB] Connection successful."
+    )
 
-            FOREIGN KEY (dish_id)
-                REFERENCES dishes(dish_id)
-        )
-    """)
 
-    # ========================================================
-    # ALTERNATIVE INGREDIENTS TABLE
-    # ========================================================
+# ============================================================
+# ID GENERATOR
+# ============================================================
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS alt_ingredients (
-            ingredient_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            recipe_id INTEGER,
-            alt_ingredient TEXT,
+def get_next_id(counter_name):
+    """
+    Generate a numeric ID similar to SQLite AUTOINCREMENT.
 
-            FOREIGN KEY (recipe_id)
-                REFERENCES recipes(recipe_id)
-        )
-    """)
+    MongoDB normally uses ObjectId, but this project already
+    uses numeric IDs such as:
 
-    conn.commit()
-    conn.close()
+        user_id
+        dish_id
+        image_id
+        recipe_id
+        ingredient_id
+
+    Therefore numeric IDs are preserved.
+    """
+
+    counter = counters_collection.find_one_and_update(
+        {
+            "_id": counter_name
+        },
+        {
+            "$inc": {
+                "seq": 1
+            }
+        },
+        upsert=True,
+        return_document=ReturnDocument.AFTER
+    )
+
+    return counter["seq"]
+
+
+# ============================================================
+# NORMALIZATION HELPERS
+# ============================================================
+
+def normalize_email(email):
+    """
+    Normalize an email address for storage/search.
+    """
+
+    if not email:
+        return ""
+
+    return str(email).strip().lower()
+
+
+def normalize_name(name):
+    """
+    Normalize a name for case-insensitive searching.
+    """
+
+    if not name:
+        return ""
+
+    return str(name).strip().lower()
 
 
 # ============================================================
@@ -244,6 +310,54 @@ def validate_email_format(email):
 
 
 # ============================================================
+# USERNAME VALIDATION
+# ============================================================
+
+def validate_username_format(username):
+    """
+    Validate username.
+
+    Username:
+    - cannot be empty
+    - minimum 3 characters
+    - maximum 30 characters
+    - can contain letters, numbers and underscore
+    """
+
+    if not username or not isinstance(username, str):
+
+        return (
+            False,
+            "Username cannot be empty."
+        )
+
+    username = username.strip()
+
+    if len(username) < 3:
+
+        return (
+            False,
+            "Username must contain at least 3 characters."
+        )
+
+    if len(username) > 30:
+
+        return (
+            False,
+            "Username must not exceed 30 characters."
+        )
+
+    if not USERNAME_REGEX.match(username):
+
+        return (
+            False,
+            "Username can contain only letters, numbers and underscore."
+        )
+
+    return True, ""
+
+
+# ============================================================
 # PASSWORD VALIDATION
 # ============================================================
 
@@ -274,34 +388,71 @@ def validate_password_format(password):
 
 
 # ============================================================
-# CHECK USER EXISTS
+# CHECK USER EXISTS BY EMAIL
 # ============================================================
 
 def user_exists(email):
     """
-    Check whether a user already exists.
+    Check whether a user already exists using email.
     """
 
     if not email:
         return False
 
-    email = email.strip().lower()
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        SELECT id
-        FROM users
-        WHERE LOWER(email) = ?
-        """,
-        (email,)
+    clean_email = normalize_email(
+        email
     )
 
-    user = cursor.fetchone()
+    user = users_collection.find_one(
+        {
+            "email": clean_email
+        },
+        {
+            "_id": 1
+        }
+    )
 
-    conn.close()
+    return user is not None
+
+
+# ============================================================
+# CHECK USERNAME EXISTS
+# ============================================================
+
+def username_exists(username):
+    """
+    Check whether a username already exists.
+    """
+
+    if not username:
+        return False
+
+    normalized_username = normalize_name(
+        username
+    )
+
+    user = users_collection.find_one(
+        {
+            "user_name_normalized": normalized_username
+        },
+        {
+            "_id": 1
+        }
+    )
+
+    # Also check old records that may have user_name
+    # but do not yet have user_name_normalized.
+    if user is not None:
+        return True
+
+    user = users_collection.find_one(
+        {
+            "user_name": username.strip()
+        },
+        {
+            "_id": 1
+        }
+    )
 
     return user is not None
 
@@ -311,6 +462,7 @@ def user_exists(email):
 # ============================================================
 
 def register_user(
+    username,
     email,
     password,
     confirm_password
@@ -318,9 +470,39 @@ def register_user(
     """
     Register a new user.
 
+    Signup fields:
+        username
+        email
+        password
+        confirm_password
+
     Returns:
         (success, message, user_id)
     """
+
+    # --------------------------------------------------------
+    # Validate username
+    # --------------------------------------------------------
+
+    valid_username, error = (
+        validate_username_format(
+            username
+        )
+    )
+
+    if not valid_username:
+
+        return (
+            False,
+            error,
+            None
+        )
+
+    clean_username = username.strip()
+
+    normalized_username = normalize_name(
+        clean_username
+    )
 
     # --------------------------------------------------------
     # Validate email
@@ -340,8 +522,8 @@ def register_user(
             None
         )
 
-    clean_email = (
-        email.strip().lower()
+    clean_email = normalize_email(
+        email
     )
 
     # --------------------------------------------------------
@@ -375,7 +557,7 @@ def register_user(
         )
 
     # --------------------------------------------------------
-    # Check existing user
+    # Check existing email
     # --------------------------------------------------------
 
     if user_exists(
@@ -385,6 +567,20 @@ def register_user(
         return (
             False,
             "An account with this email address already exists.",
+            None
+        )
+
+    # --------------------------------------------------------
+    # Check existing username
+    # --------------------------------------------------------
+
+    if username_exists(
+        clean_username
+    ):
+
+        return (
+            False,
+            "This username is already taken. Please choose another username.",
             None
         )
 
@@ -400,38 +596,44 @@ def register_user(
     )
 
     # --------------------------------------------------------
+    # Generate user ID
+    # --------------------------------------------------------
+
+    new_user_id = get_next_id(
+        "users"
+    )
+
+    # --------------------------------------------------------
+    # Create user document
+    # --------------------------------------------------------
+
+    user_document = {
+        "_id": new_user_id,
+        "id": new_user_id,
+
+        "user_name": clean_username,
+
+        "user_name_normalized":
+            normalized_username,
+
+        "email": clean_email,
+
+        "password_hash":
+            password_hash,
+
+        "created_at":
+            datetime.utcnow()
+    }
+
+    # --------------------------------------------------------
     # Insert user
     # --------------------------------------------------------
 
     try:
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            INSERT INTO users
-            (
-                email,
-                password_hash,
-                created_at
-            )
-            VALUES (?, ?, ?)
-            """,
-            (
-                clean_email,
-                password_hash,
-                datetime.utcnow()
-            )
+        users_collection.insert_one(
+            user_document
         )
-
-        conn.commit()
-
-        new_user_id = (
-            cursor.lastrowid
-        )
-
-        conn.close()
 
         return (
             True,
@@ -439,7 +641,17 @@ def register_user(
             new_user_id
         )
 
-    except sqlite3.IntegrityError:
+    except DuplicateKeyError as e:
+
+        error_text = str(e)
+
+        if "user_name" in error_text:
+
+            return (
+                False,
+                "This username is already taken. Please choose another username.",
+                None
+            )
 
         return (
             False,
@@ -462,73 +674,128 @@ def register_user(
 
 def authenticate_user(
     email,
+    username,
     password
 ):
     """
     Authenticate user.
 
+    Login fields:
+        email
+        username
+        password
+
     Returns:
         (success, message, user_dict)
     """
 
-    if not email or not password:
+    # --------------------------------------------------------
+    # Basic validation
+    # --------------------------------------------------------
+
+    if not email:
 
         return (
             False,
-            "Invalid email or password.",
+            "Email ID cannot be empty.",
             None
         )
 
-    clean_email = (
-        email.strip().lower()
+    if not username:
+
+        return (
+            False,
+            "Username cannot be empty.",
+            None
+        )
+
+    if not password:
+
+        return (
+            False,
+            "Password cannot be empty.",
+            None
+        )
+
+    clean_email = normalize_email(
+        email
     )
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    clean_username = username.strip()
 
-    cursor.execute(
-        """
-        SELECT
-            id,
-            email,
-            password_hash,
-            user_name
-        FROM users
-        WHERE LOWER(email) = ?
-        """,
-        (clean_email,)
+    normalized_username = normalize_name(
+        clean_username
     )
 
-    user = cursor.fetchone()
+    # --------------------------------------------------------
+    # Find user using BOTH email and username
+    # --------------------------------------------------------
 
-    conn.close()
+    user = users_collection.find_one(
+        {
+            "email": clean_email,
+            "$or": [
+                {
+                    "user_name_normalized":
+                        normalized_username
+                },
+                {
+                    "user_name":
+                        clean_username
+                }
+            ]
+        }
+    )
+
+    # --------------------------------------------------------
+    # User not found
+    # --------------------------------------------------------
 
     if not user:
 
         return (
             False,
-            "Invalid email or password.",
+            "Invalid email, username or password.",
             None
         )
 
+    # --------------------------------------------------------
+    # Check password
+    # --------------------------------------------------------
+
     if not check_password_hash(
-        user["password_hash"],
+        user.get("password_hash", ""),
         password
     ):
 
         return (
             False,
-            "Invalid email or password.",
+            "Invalid email, username or password.",
             None
         )
+
+    # --------------------------------------------------------
+    # Successful login
+    # --------------------------------------------------------
 
     return (
         True,
         "Login successful.",
         {
-            "id": user["id"],
-            "email": user["email"],
-            "user_name": user["user_name"]
+            "id": user.get(
+                "id",
+                user.get("_id")
+            ),
+
+            "email": user.get(
+                "email",
+                ""
+            ),
+
+            "user_name": user.get(
+                "user_name",
+                ""
+            )
         }
     )
 
@@ -553,103 +820,111 @@ def save_dish(
     If the dish does not exist:
         create a new dish.
 
-    IMPORTANT:
-    dish_type is retained in the function arguments for compatibility
-    with older app.py code, but it is NOT stored because the current
-    database no longer has a 'type' column.
+    dish_type is retained for compatibility with app.py
+    but is not stored.
     """
 
     if not dish_name:
         return None
 
-    clean_name = dish_name.strip()
+    clean_name = str(
+        dish_name
+    ).strip()
 
     if not clean_name:
         return None
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    normalized_name = normalize_name(
+        clean_name
+    )
 
-    try:
+    # --------------------------------------------------------
+    # Check existing dish
+    # --------------------------------------------------------
 
-        # ----------------------------------------------------
-        # Check if dish already exists
-        # ----------------------------------------------------
+    existing_dish = (
+        dishes_collection.find_one(
+            {
+                "dish_name_normalized":
+                    normalized_name
+            }
+        )
+    )
 
-        cursor.execute(
-            """
-            SELECT dish_id
-            FROM dishes
-            WHERE LOWER(TRIM(dish_name))
-                  = LOWER(TRIM(?))
-            LIMIT 1
-            """,
-            (clean_name,)
+    if existing_dish:
+
+        dish_id = existing_dish.get(
+            "dish_id",
+            existing_dish.get("_id")
         )
 
-        existing_dish = cursor.fetchone()
+        update_fields = {}
 
-        # ----------------------------------------------------
-        # Existing dish
-        # ----------------------------------------------------
+        if description is not None:
+            update_fields[
+                "description"
+            ] = description
 
-        if existing_dish:
+        if cuisine is not None:
+            update_fields[
+                "cuisine"
+            ] = cuisine
 
-            dish_id = existing_dish["dish_id"]
+        if course is not None:
+            update_fields[
+                "course"
+            ] = course
 
-            # Only update fields when useful new information
-            # is available.
-            cursor.execute(
-                """
-                UPDATE dishes
-                SET
-                    description = COALESCE(?, description),
-                    cuisine = COALESCE(?, cuisine),
-                    course = COALESCE(?, course)
-                WHERE dish_id = ?
-                """,
-                (
-                    description,
-                    cuisine,
-                    course,
-                    dish_id
-                )
+        if update_fields:
+
+            dishes_collection.update_one(
+                {
+                    "_id":
+                        existing_dish["_id"]
+                },
+                {
+                    "$set":
+                        update_fields
+                }
             )
 
-            conn.commit()
+        return dish_id
 
-            return dish_id
+    # --------------------------------------------------------
+    # Create new dish
+    # --------------------------------------------------------
 
-        # ----------------------------------------------------
-        # New dish
-        # ----------------------------------------------------
+    new_dish_id = get_next_id(
+        "dishes"
+    )
 
-        cursor.execute(
-            """
-            INSERT INTO dishes
-            (
-                dish_name,
-                description,
-                cuisine,
-                course
-            )
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                clean_name,
-                description,
-                cuisine,
-                course
-            )
-        )
+    dish_document = {
+        "_id": new_dish_id,
 
-        conn.commit()
+        "dish_id":
+            new_dish_id,
 
-        return cursor.lastrowid
+        "dish_name":
+            clean_name,
 
-    finally:
+        "dish_name_normalized":
+            normalized_name,
 
-        conn.close()
+        "description":
+            description,
+
+        "cuisine":
+            cuisine,
+
+        "course":
+            course
+    }
+
+    dishes_collection.insert_one(
+        dish_document
+    )
+
+    return new_dish_id
 
 
 # ============================================================
@@ -663,40 +938,31 @@ def get_dish_by_name(
     Find an existing dish by name.
 
     Returns:
-        sqlite3.Row or None
+        dictionary or None
     """
 
     if not dish_name:
         return None
 
-    clean_name = dish_name.strip()
+    clean_name = str(
+        dish_name
+    ).strip()
 
     if not clean_name:
         return None
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    normalized_name = normalize_name(
+        clean_name
+    )
 
-    try:
+    dish = dishes_collection.find_one(
+        {
+            "dish_name_normalized":
+                normalized_name
+        }
+    )
 
-        cursor.execute(
-            """
-            SELECT *
-            FROM dishes
-            WHERE LOWER(TRIM(dish_name))
-                  = LOWER(TRIM(?))
-            LIMIT 1
-            """,
-            (
-                clean_name,
-            )
-        )
-
-        return cursor.fetchone()
-
-    finally:
-
-        conn.close()
+    return dish
 
 
 # ============================================================
@@ -713,43 +979,29 @@ def update_dish(
     """
     Update an existing dish.
 
-    dish_type is retained for compatibility with older code,
-    but is not stored because the current database has no
-    type column.
+    dish_type is retained for compatibility
+    but is not stored.
     """
 
     if not dish_id:
         return 0
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    update_fields = {
+        "description": description,
+        "cuisine": cuisine,
+        "course": course
+    }
 
-    try:
+    result = dishes_collection.update_one(
+        {
+            "dish_id": dish_id
+        },
+        {
+            "$set": update_fields
+        }
+    )
 
-        cursor.execute(
-            """
-            UPDATE dishes
-            SET
-                description = ?,
-                cuisine = ?,
-                course = ?
-            WHERE dish_id = ?
-            """,
-            (
-                description,
-                cuisine,
-                course,
-                dish_id
-            )
-        )
-
-        conn.commit()
-
-        return cursor.rowcount
-
-    finally:
-
-        conn.close()
+    return result.modified_count
 
 
 # ============================================================
@@ -770,39 +1022,40 @@ def save_image(
         image_id
     """
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    image_id = get_next_id(
+        "images"
+    )
 
-    try:
+    image_document = {
+        "_id": image_id,
 
-        cursor.execute(
-            """
-            INSERT INTO images
-            (
-                user_id,
-                input_type,
-                image_available,
-                image_path,
-                dish_id
-            )
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                user_id,
-                input_type,
-                image_available,
-                image_path,
-                dish_id
-            )
-        )
+        "image_id":
+            image_id,
 
-        conn.commit()
+        "user_id":
+            user_id,
 
-        return cursor.lastrowid
+        "input_type":
+            input_type,
 
-    finally:
+        "image_available":
+            image_available,
 
-        conn.close()
+        "image_path":
+            image_path,
+
+        "dish_id":
+            dish_id,
+
+        "created_at":
+            datetime.utcnow()
+    }
+
+    images_collection.insert_one(
+        image_document
+    )
+
+    return image_id
 
 
 # ============================================================
@@ -820,30 +1073,20 @@ def update_image_dish(
     if not image_id or not dish_id:
         return 0
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    try:
-
-        cursor.execute(
-            """
-            UPDATE images
-            SET dish_id = ?
-            WHERE image_id = ?
-            """,
-            (
-                dish_id,
+    result = images_collection.update_one(
+        {
+            "image_id":
                 image_id
-            )
-        )
+        },
+        {
+            "$set": {
+                "dish_id":
+                    dish_id
+            }
+        }
+    )
 
-        conn.commit()
-
-        return cursor.rowcount
-
-    finally:
-
-        conn.close()
+    return result.modified_count
 
 
 # ============================================================
@@ -859,73 +1102,107 @@ def save_recipe(
 ):
     """
     Store a recipe.
-    Reuses existing recipe if one already exists for this dish_id and recipe_name
-    to avoid duplicate insertions on page refresh.
+
+    Reuses an existing recipe if one already exists
+    for the same dish_id and recipe_name.
 
     Returns:
         recipe_id
     """
 
     if not dish_id:
+
         raise ValueError(
             "Cannot save recipe without a valid dish_id."
         )
 
     if not recipe_name:
+
         raise ValueError(
             "Recipe name cannot be empty."
         )
 
-    clean_recipe_name = str(recipe_name).strip()
+    clean_recipe_name = str(
+        recipe_name
+    ).strip()
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    if not clean_recipe_name:
 
-    try:
-
-        # Check if identical recipe already exists for this dish
-        cursor.execute(
-            """
-            SELECT recipe_id
-            FROM recipes
-            WHERE dish_id = ?
-              AND LOWER(TRIM(recipe_name)) = LOWER(TRIM(?))
-            LIMIT 1
-            """,
-            (dish_id, clean_recipe_name)
-        )
-        existing_recipe = cursor.fetchone()
-        if existing_recipe:
-            return existing_recipe["recipe_id"]
-
-        cursor.execute(
-            """
-            INSERT INTO recipes
-            (
-                dish_id,
-                recipe_name,
-                ingredients,
-                instruction,
-                prepare_time
-            )
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                dish_id,
-                clean_recipe_name,
-                ingredients,
-                instruction,
-                prepare_time
-            )
+        raise ValueError(
+            "Recipe name cannot be empty."
         )
 
-        conn.commit()
+    normalized_recipe_name = (
+        normalize_name(
+            clean_recipe_name
+        )
+    )
 
-        return cursor.lastrowid
+    # --------------------------------------------------------
+    # Check existing recipe
+    # --------------------------------------------------------
 
-    finally:
+    existing_recipe = (
+        recipes_collection.find_one(
+            {
+                "dish_id":
+                    dish_id,
 
-        conn.close()
+                "recipe_name_normalized":
+                    normalized_recipe_name
+            }
+        )
+    )
+
+    if existing_recipe:
+
+        return existing_recipe.get(
+            "recipe_id",
+            existing_recipe.get("_id")
+        )
+
+    # --------------------------------------------------------
+    # Create new recipe
+    # --------------------------------------------------------
+
+    recipe_id = get_next_id(
+        "recipes"
+    )
+
+    recipe_document = {
+        "_id":
+            recipe_id,
+
+        "recipe_id":
+            recipe_id,
+
+        "dish_id":
+            dish_id,
+
+        "recipe_name":
+            clean_recipe_name,
+
+        "recipe_name_normalized":
+            normalized_recipe_name,
+
+        "ingredients":
+            ingredients,
+
+        "instruction":
+            instruction,
+
+        "prepare_time":
+            prepare_time,
+
+        "created_at":
+            datetime.utcnow()
+    }
+
+    recipes_collection.insert_one(
+        recipe_document
+    )
+
+    return recipe_id
 
 
 # ============================================================
@@ -942,27 +1219,14 @@ def get_recipe(
     if not recipe_id:
         return None
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    recipe = recipes_collection.find_one(
+        {
+            "recipe_id":
+                recipe_id
+        }
+    )
 
-    try:
-
-        cursor.execute(
-            """
-            SELECT *
-            FROM recipes
-            WHERE recipe_id = ?
-            """,
-            (
-                recipe_id,
-            )
-        )
-
-        return cursor.fetchone()
-
-    finally:
-
-        conn.close()
+    return recipe
 
 
 # ============================================================
@@ -979,28 +1243,19 @@ def get_recipes_by_dish(
     if not dish_id:
         return []
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    try:
-
-        cursor.execute(
-            """
-            SELECT *
-            FROM recipes
-            WHERE dish_id = ?
-            ORDER BY recipe_id
-            """,
-            (
-                dish_id,
-            )
+    recipes = list(
+        recipes_collection.find(
+            {
+                "dish_id":
+                    dish_id
+            }
+        ).sort(
+            "recipe_id",
+            1
         )
+    )
 
-        return cursor.fetchall()
-
-    finally:
-
-        conn.close()
+    return recipes
 
 
 # ============================================================
@@ -1018,28 +1273,19 @@ def get_alternative_ingredients(
     if not recipe_id:
         return []
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    try:
-
-        cursor.execute(
-            """
-            SELECT *
-            FROM alt_ingredients
-            WHERE recipe_id = ?
-            ORDER BY ingredient_id
-            """,
-            (
-                recipe_id,
-            )
+    ingredients = list(
+        alt_ingredients_collection.find(
+            {
+                "recipe_id":
+                    recipe_id
+            }
+        ).sort(
+            "ingredient_id",
+            1
         )
+    )
 
-        return cursor.fetchall()
-
-    finally:
-
-        conn.close()
+    return ingredients
 
 
 # ============================================================
@@ -1055,6 +1301,7 @@ def save_alternative_ingredient(
     """
 
     if not recipe_id:
+
         raise ValueError(
             "Cannot save alternative ingredient without recipe_id."
         )
@@ -1062,33 +1309,29 @@ def save_alternative_ingredient(
     if not alt_ingredient:
         return None
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    ingredient_id = get_next_id(
+        "alt_ingredients"
+    )
 
-    try:
+    ingredient_document = {
+        "_id":
+            ingredient_id,
 
-        cursor.execute(
-            """
-            INSERT INTO alt_ingredients
-            (
-                recipe_id,
-                alt_ingredient
-            )
-            VALUES (?, ?)
-            """,
-            (
-                recipe_id,
-                alt_ingredient
-            )
-        )
+        "ingredient_id":
+            ingredient_id,
 
-        conn.commit()
+        "recipe_id":
+            recipe_id,
 
-        return cursor.lastrowid
+        "alt_ingredient":
+            alt_ingredient
+    }
 
-    finally:
+    alt_ingredients_collection.insert_one(
+        ingredient_document
+    )
 
-        conn.close()
+    return ingredient_id
 
 
 # ============================================================
@@ -1105,27 +1348,14 @@ def get_dish(
     if not dish_id:
         return None
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    dish = dishes_collection.find_one(
+        {
+            "dish_id":
+                dish_id
+        }
+    )
 
-    try:
-
-        cursor.execute(
-            """
-            SELECT *
-            FROM dishes
-            WHERE dish_id = ?
-            """,
-            (
-                dish_id,
-            )
-        )
-
-        return cursor.fetchone()
-
-    finally:
-
-        conn.close()
+    return dish
 
 
 # ============================================================
@@ -1142,31 +1372,18 @@ def get_image(
     if not image_id:
         return None
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    image = images_collection.find_one(
+        {
+            "image_id":
+                image_id
+        }
+    )
 
-    try:
-
-        cursor.execute(
-            """
-            SELECT *
-            FROM images
-            WHERE image_id = ?
-            """,
-            (
-                image_id,
-            )
-        )
-
-        return cursor.fetchone()
-
-    finally:
-
-        conn.close()
+    return image
 
 
 # ============================================================
-# DATABASE INITIALIZATION
+# INITIALIZE DATABASE
 # ============================================================
 
 init_db()
