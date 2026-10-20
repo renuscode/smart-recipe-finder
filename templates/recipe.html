@@ -1,476 +1,558 @@
-﻿<!DOCTYPE html>
+﻿```html
+<!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Recipe Finder | {% if recipe.found %}{{ recipe.name }}{% else %}Recipe Details{% endif %}</title>
 
-    <!-- Bootstrap 5 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>{{ recipe.name or recipe.dish or "Recipe Details" }} - Smart Recipe Finder</title>
 
-    <!-- Font Awesome 6 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet">
 
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+          rel="stylesheet">
+
+    <style>
+        body {
+            background: #f5f7fb;
+            color: #263238;
+            font-family: Arial, sans-serif;
+        }
+
+        .navbar {
+            background: #176b4d;
+        }
+
+        .navbar-brand {
+            color: white;
+            font-weight: bold;
+        }
+
+        .navbar-brand:hover {
+            color: #e7f5ed;
+        }
+
+        .page-header {
+            background: linear-gradient(135deg, #176b4d, #38a879);
+            color: white;
+            padding: 35px 20px;
+            border-radius: 16px;
+            margin-bottom: 25px;
+        }
+
+        .content-card {
+            background: white;
+            border-radius: 14px;
+            padding: 24px;
+            margin-bottom: 22px;
+            box-shadow: 0 3px 14px rgba(0, 0, 0, 0.06);
+        }
+
+        .section-title {
+            color: #176b4d;
+            font-weight: bold;
+            margin-bottom: 18px;
+        }
+
+        .ingredient-item {
+            border: 1px solid #e5ece8;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 14px;
+            background: white;
+        }
+
+        .ingredient-name {
+            font-weight: bold;
+            font-size: 1.05rem;
+        }
+
+        .ingredient-amount {
+            color: #66756d;
+            font-size: 0.92rem;
+        }
+
+        .nutrition-panel {
+            background: #f2faf5;
+            border-radius: 9px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+
+        .substitution-panel {
+            background: #f8f9fc;
+            border: 1px solid #e5e8f0;
+            border-radius: 9px;
+            padding: 14px;
+            margin-top: 12px;
+        }
+
+        .substitution-panel h6 {
+            color: #176b4d;
+            font-weight: bold;
+        }
+
+        .badge-soft {
+            display: inline-block;
+            background: #e3f3e9;
+            color: #176b4d;
+            border-radius: 20px;
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            margin: 3px 0;
+        }
+
+        .instruction-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .step-number {
+            min-width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: #176b4d;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .notice {
+            background: #fff8e6;
+            border-left: 4px solid #e0a52b;
+            padding: 12px 14px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+
+        .back-button {
+            background: #176b4d;
+            border-color: #176b4d;
+            color: white;
+        }
+
+        .back-button:hover {
+            background: #105239;
+            color: white;
+        }
+
+        footer {
+            color: #748078;
+            padding: 20px 0;
+            text-align: center;
+        }
+
+        @media (max-width: 576px) {
+            .content-card {
+                padding: 17px;
+            }
+
+            .page-header {
+                padding: 25px 16px;
+            }
+        }
+    </style>
 </head>
 
 <body>
 
-<!-- =========================================================
-     NAVBAR
-========================================================= -->
-<nav class="navbar custom-navbar">
+<!-- Navigation -->
+<nav class="navbar navbar-expand-lg">
     <div class="container">
-        <a class="navbar-brand logo-area" href="{{ url_for('home_page') }}">
-            <div class="logo-circle">
-                <i class="fa-solid fa-utensils"></i>
-            </div>
-            <span>Smart Recipe Finder</span>
+        <a class="navbar-brand text-decoration-none" href="/">
+            <i class="fa-solid fa-utensils me-2"></i>
+            Smart Recipe Finder
         </a>
 
-        <div class="navbar-links">
-            <a class="nav-link" href="{{ url_for('home_page') }}">
-                <i class="fa-solid fa-house"></i>
-                Home
-            </a>
-            <a class="nav-link" href="{{ url_for('upload_page') }}">
-                <i class="fa-solid fa-cloud-arrow-up"></i>
-                Upload
-            </a>
-            <a class="nav-link active" href="{{ url_for('recipe_page') }}">
-                <i class="fa-solid fa-book-open"></i>
-                Recipe
-            </a>
-            {% if user %}
-                <a class="nav-link" href="{{ url_for('logout') }}">
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                    Logout
-                </a>
-            {% else %}
-                <a class="nav-link" href="{{ url_for('login_page') }}">
-                    <i class="fa-solid fa-right-to-bracket"></i>
-                    Login
-                </a>
-            {% endif %}
-        </div>
+        <a href="/" class="btn btn-outline-light btn-sm">
+            <i class="fa-solid fa-house me-1"></i>
+            Home
+        </a>
     </div>
 </nav>
 
+<main class="container py-4">
 
-<!-- =========================================================
-     RECIPE PAGE CONTENT
-========================================================= -->
-<main class="recipe-page">
-    <div class="container">
+    <!-- Recipe heading -->
+    <section class="page-header">
+        <h1 class="fw-bold">
+            {{ recipe.name or recipe.dish or "Recipe Details" }}
+        </h1>
 
-        {% if recipe.found %}
+        {% if recipe.variety %}
+            <p class="mb-2">
+                <i class="fa-solid fa-bowl-food me-2"></i>
+                {{ recipe.variety }}
+            </p>
+        {% endif %}
 
-            <!-- Heading -->
-            <section class="recipe-heading">
-                <div>
-                    <span class="small-badge">
-                        <i class="fa-solid fa-circle-check"></i>
-                        DISH IDENTIFIED
-                    </span>
-                    <h1>Your Recipe</h1>
-                    <p>Here is the authentic recipe for your recognized dish.</p>
-                </div>
+        {% if recipe.description %}
+            <p class="mb-0">{{ recipe.description }}</p>
+        {% endif %}
 
-                <a href="{{ url_for('upload_page') }}" class="back-link">
-                    <i class="fa-solid fa-arrow-left"></i>
-                    Back to Upload
-                </a>
-            </section>
+        {% if recipe.source %}
+            <p class="mt-3 mb-0 small">
+                <i class="fa-solid fa-book-open me-1"></i>
+                Source: {{ recipe.source }}
+            </p>
+        {% endif %}
+    </section>
 
+    <!-- Recipe information -->
+    <section class="content-card">
+        <h4 class="section-title">
+            <i class="fa-solid fa-circle-info me-2"></i>
+            Recipe Information
+        </h4>
 
-            <!-- =================================================
-                 DISH HERO SECTION
-            ================================================== -->
-            <section class="recipe-hero">
-                <div class="recipe-image position-relative" style="overflow: hidden;">
-                    {% if user_image %}
-                        <!-- User Captured / Uploaded Image -->
-                        <img src="{{ user_image }}" alt="{{ recipe.name }}" style="width: 100%; height: 100%; object-fit: cover;">
-                    {% elif recipe.image_url %}
-                        <!-- Resolved Dataset Image -->
-                        <img src="{{ recipe.image_url }}" alt="{{ recipe.name }}" style="width: 100%; height: 100%; object-fit: cover;">
-                    {% else %}
-                        <!-- Elegant Placeholder Graphic -->
-                        <div class="food-symbol">
-                            <i class="fa-solid fa-bowl-food"></i>
-                        </div>
-                    {% endif %}
-                </div>
+        <div class="row g-3">
 
-                <div class="recipe-main-info">
-                    <span class="dish-category">
-                        {{ recipe.cuisine | upper }}
-                        {% if recipe.predicted_variety %}
-                            &bull; {{ recipe.predicted_variety | upper }}
-                        {% elif recipe.matched_dish %}
-                            &bull; {{ recipe.matched_dish | upper }}
-                        {% endif %}
-                    </span>
-
-                    <h2>{{ recipe.name | title }}</h2>
-
-                    <p>{{ recipe.description }}</p>
-
-                    <div class="recipe-meta">
-                        <div>
-                            <i class="fa-regular fa-clock"></i>
-                            <span>{{ recipe.prep_time }}</span>
-                        </div>
-
-                        <div>
-                            <i class="fa-solid fa-utensils"></i>
-                            <span>{{ recipe.course }}</span>
-                        </div>
-
-                        <div>
-                            <i class="fa-solid fa-leaf"></i>
-                            <span>{{ recipe.diet }}</span>
+            {% if recipe.preparation_time %}
+                <div class="col-6 col-md-4">
+                    <div class="border rounded p-3 h-100">
+                        <i class="fa-regular fa-clock text-success me-2"></i>
+                        <strong>Preparation</strong>
+                        <div class="mt-1">
+                            {{ recipe.preparation_time }}
                         </div>
                     </div>
                 </div>
-            </section>
-
-
-            <!-- =================================================
-                 RECIPE CONTENT (Ingredients & Preparation)
-            ================================================== -->
-            <section class="recipe-content">
-
-                <!-- Dynamic Ingredients Panel -->
-                <div class="recipe-panel">
-                    <div class="panel-title">
-                        <div class="panel-icon green-icon">
-                            <i class="fa-solid fa-basket-shopping"></i>
-                        </div>
-                        <div>
-                            <h3>Ingredients</h3>
-                            <p>What you need</p>
-                        </div>
-                    </div>
-
-                    <ul class="ingredient-list">
-                        {% for item in recipe.ingredients %}
-                            <li>
-                                <span>{{ item.name }}</span>
-                                {% if item.amount %}
-                                    <strong>{{ item.amount }}</strong>
-                                {% endif %}
-                            </li>
-                        {% else %}
-                            <li><span>Ingredients not specified in dataset.</span></li>
-                        {% endfor %}
-                    </ul>
-                </div>
-
-
-                <!-- Dynamic Preparation Steps Panel -->
-                <div class="recipe-panel">
-                    <div class="panel-title">
-                        <div class="panel-icon orange-icon">
-                            <i class="fa-solid fa-list-ol"></i>
-                        </div>
-                        <div>
-                            <h3>Preparation</h3>
-                            <p>Step-by-step method</p>
-                        </div>
-                    </div>
-
-                    <div class="steps">
-                        {% for step in recipe.instructions %}
-                            <div class="step">
-                                <span>{{ "%02d" % loop.index }}</span>
-                                <p>{{ step }}</p>
-                            </div>
-                        {% else %}
-                            <p class="text-muted">Preparation steps not available in dataset.</p>
-                        {% endfor %}
-                    </div>
-                </div>
-
-            </section>
-
-
-            <!-- =================================================
-                 RECIPE SUMMARY / NOTE
-            ================================================== -->
-            {% if recipe.description %}
-                <section class="recipe-note">
-                    <div class="note-icon">
-                        <i class="fa-solid fa-lightbulb"></i>
-                    </div>
-                    <div>
-                        <h4>Recipe Overview</h4>
-                        <p>{{ recipe.description }}</p>
-                    </div>
-                </section>
             {% endif %}
 
-
-            <!-- =================================================
-                 NEXT ACTION (Replaces Health module cleanly)
-            ================================================== -->
-            <section class="health-navigation">
-                <div>
-                    <span>NEXT DISH</span>
-                    <h3>Want to identify another dish?</h3>
-                    <p>Upload another food image or snap a photo using your camera.</p>
+            {% if recipe.cooking_time %}
+                <div class="col-6 col-md-4">
+                    <div class="border rounded p-3 h-100">
+                        <i class="fa-solid fa-fire-burner text-success me-2"></i>
+                        <strong>Cooking</strong>
+                        <div class="mt-1">
+                            {{ recipe.cooking_time }}
+                        </div>
+                    </div>
                 </div>
+            {% endif %}
 
-                <a href="{{ url_for('upload_page') }}" class="health-action-btn">
-                    <i class="fa-solid fa-camera"></i>
-                    Scan Another Dish
-                </a>
-            </section>
+            {% if recipe.servings %}
+                <div class="col-6 col-md-4">
+                    <div class="border rounded p-3 h-100">
+                        <i class="fa-solid fa-users text-success me-2"></i>
+                        <strong>Servings</strong>
+                        <div class="mt-1">
+                            {{ recipe.servings }}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+        </div>
+    </section>
+
+    <!-- Ingredients and nutrition -->
+    <section class="content-card">
+        <h4 class="section-title">
+            <i class="fa-solid fa-carrot me-2"></i>
+            Ingredients and Nutrition Scores
+        </h4>
+
+        {% if recipe.ingredients %}
+
+            {% for item in recipe.ingredients %}
+                <div class="ingredient-item">
+
+                    <!-- Ingredient name and quantity -->
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                        <div>
+                            <div class="ingredient-name">
+                                <i class="fa-solid fa-leaf text-success me-2"></i>
+                                {{ item.name }}
+                            </div>
+
+                            {% if item.amount %}
+                                <div class="ingredient-amount mt-1">
+                                    Amount: {{ item.amount }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Nutrition score -->
+                    <div class="nutrition-panel">
+                        <strong>
+                            <i class="fa-solid fa-heart-pulse me-1"></i>
+                            Nutrition Score
+                        </strong>
+
+                        {% if item.nutrition is defined and item.nutrition and item.nutrition.available and item.nutrition.score is not none %}
+
+                            <div class="d-flex justify-content-between mt-2 mb-1">
+                                <span>
+                                    {{ item.nutrition.label or "Provisional nutrition score" }}
+                                </span>
+
+                                <strong>
+                                    {{ item.nutrition.score }}/100
+                                </strong>
+                            </div>
+
+                            <div class="progress"
+                                 role="progressbar"
+                                 aria-label="Provisional nutrition score"
+                                 aria-valuenow="{{ item.nutrition.score }}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+
+                                <div class="progress-bar bg-success nutrition-progress-bar"
+                                     data-score="{{ item.nutrition.score }}">
+                                </div>
+                            </div>
+
+                            <small class="text-muted d-block mt-2">
+                                This is a provisional model-generated score,
+                                not a medically validated health rating.
+                            </small>
+
+                        {% else %}
+
+                            <p class="text-muted mb-0 mt-2">
+                                Nutrition score unavailable for this ingredient
+                                because a suitable matching nutrition record
+                                was not found.
+                            </p>
+
+                        {% endif %}
+                    </div>
+
+                    <!-- Ingredient alternatives -->
+                    <div class="substitution-panel">
+                        <h6>
+                            <i class="fa-solid fa-arrows-rotate me-2"></i>
+                            Possible Ingredient Alternatives
+                        </h6>
+
+                        {% if item.alternatives %}
+
+                            {% for alt in item.alternatives %}
+                                <div class="border rounded bg-white p-3 mb-3">
+
+                                    <div class="fw-bold">
+                                        {{ alt.ingredient }}
+                                    </div>
+
+                                    {% if alt.substitution_type %}
+                                        <span class="badge-soft">
+                                            {{ alt.substitution_type }}
+                                        </span>
+                                    {% endif %}
+
+                                    {% if alt.quantity_guidance %}
+                                        <p class="mt-2 mb-1">
+                                            <strong>Quantity:</strong>
+                                            {{ alt.quantity_guidance }}
+                                        </p>
+                                    {% endif %}
+
+                                    {% if alt.usage_notes %}
+                                        <p class="mb-1">
+                                            <strong>Usage notes:</strong>
+                                            {{ alt.usage_notes }}
+                                        </p>
+                                    {% endif %}
+
+                                    {% if alt.taste_texture_change %}
+                                        <p class="mb-1">
+                                            <strong>Taste or texture:</strong>
+                                            {{ alt.taste_texture_change }}
+                                        </p>
+                                    {% endif %}
+
+                                    {% if alt.nutritional_rationale %}
+                                        <p class="mb-1">
+                                            <strong>Nutritional rationale:</strong>
+                                            {{ alt.nutritional_rationale }}
+                                        </p>
+                                    {% endif %}
+
+                                    {% if alt.dietary_notes %}
+                                        <p class="mb-1">
+                                            <strong>Dietary notes:</strong>
+                                            {{ alt.dietary_notes }}
+                                        </p>
+                                    {% endif %}
+
+                                    {% if alt.evidence_confidence %}
+                                        <p class="mb-1">
+                                            <strong>Evidence confidence:</strong>
+                                            {{ alt.evidence_confidence }}
+                                        </p>
+                                    {% endif %}
+
+                                    {% if alt.source_name %}
+                                        <p class="mb-1">
+                                            <strong>Source:</strong>
+                                            {{ alt.source_name }}
+                                        </p>
+                                    {% endif %}
+
+                                    {% if alt.source_url and (alt.source_url.startswith('https://') or alt.source_url.startswith('http://')) %}
+                                        <a href="{{ alt.source_url }}"
+                                           target="_blank"
+                                           rel="noopener noreferrer">
+                                            View source
+                                            <i class="fa-solid fa-arrow-up-right-from-square ms-1"></i>
+                                        </a>
+                                    {% endif %}
+
+                                </div>
+                            {% endfor %}
+
+                            <div class="notice">
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+
+                                <strong>Important:</strong>
+                                Alternatives may be conditional. Check the
+                                quantity, cooking method, allergies, dietary
+                                restrictions and source information before use.
+                                A substitute may change the taste, texture or
+                                nutritional content of the recipe.
+                            </div>
+
+                        {% else %}
+
+                            <p class="text-muted mb-0">
+                                No matching alternative found in the
+                                substitution dataset for this ingredient.
+                            </p>
+
+                        {% endif %}
+                    </div>
+
+                </div>
+            {% endfor %}
 
         {% else %}
 
-            <!-- =================================================
-                 RECIPE NOT FOUND STATE
-            ================================================== -->
-            <section class="recipe-heading">
-                <div>
-                    <span class="small-badge" style="background: #fff3cd; color: #856404; border: 1px solid #ffeeba;">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                        RECIPE UNAVAILABLE
-                    </span>
-                    <h1>Recipe Not Found</h1>
-                    <p>
-                        {% if recipe.query %}
-                            We couldn't find a recipe for <strong>{{ recipe.query }}</strong> in our dataset.
-                        {% else %}
-                            {{ recipe.message }}
-                        {% endif %}
-                    </p>
-                </div>
-                <a href="{{ url_for('upload_page') }}" class="back-link">
-                    <i class="fa-solid fa-arrow-left"></i>
-                    Back to Upload
-                </a>
-            </section>
-
-            <!-- Similar Dishes Flashcards -->
-            {% if recipe.alternatives and recipe.alternatives | length > 0 %}
-            <section style="margin-bottom: 2rem;">
-                <h3 style="color: #24472c; font-weight: 700; margin-bottom: 1rem;">
-                    <i class="fa-solid fa-wand-magic-sparkles text-success me-2"></i>
-                    You May Also Like
-                </h3>
-                <div class="flashcard-grid">
-                    {% for alt in recipe.alternatives %}
-                    <a href="/recipe?dish={{ alt.dish | urlencode }}&variety={{ alt.variety | urlencode }}"
-                       class="flashcard-link">
-                        <div class="flashcard">
-                            {% if alt.image_url %}
-                                <img src="{{ alt.image_url }}" alt="{{ alt.name }}" class="flashcard-img">
-                            {% else %}
-                                <div class="flashcard-img-placeholder">
-                                    <i class="fa-solid fa-bowl-food"></i>
-                                </div>
-                            {% endif %}
-                            <div class="flashcard-body">
-                                <div class="flashcard-name">{{ alt.name }}</div>
-                                {% if alt.confidence %}
-                                <div class="flashcard-confidence">
-                                    <span class="flashcard-pct">{{ alt.confidence }}% match</span>
-                                </div>
-                                {% endif %}
-                                <div class="flashcard-meta">{{ alt.cuisine }}
-                                    {% if alt.diet %} &bull; {{ alt.diet }}{% endif %}
-                                </div>
-                                <span class="flashcard-btn">View Recipe</span>
-                            </div>
-                        </div>
-                    </a>
-                    {% endfor %}
-                </div>
-            </section>
-            {% endif %}
-
-            <!-- Recipe Search Box -->
-            <section class="recipe-search-section">
-                <h4 style="color: #24472c; font-weight: 700; margin-bottom: 0.75rem;">
-                    <i class="fa-solid fa-magnifying-glass text-success me-2"></i>
-                    Search Recipes in Our Dataset
-                </h4>
-                <div class="recipe-search-bar">
-                    <input type="text" id="recipeSearchInput" class="recipe-search-input"
-                           placeholder="Search by dish name, cuisine... (e.g. Biryani, South Indian)">
-                    <button id="recipeSearchBtn" class="recipe-search-submit">
-                        <i class="fa-solid fa-search"></i> Search
-                    </button>
-                </div>
-                <div id="recipeSearchResults" class="flashcard-grid mt-3"></div>
-            </section>
-
-            <!-- Action Buttons -->
-            <div class="text-center mt-4 mb-5">
-                <a href="{{ url_for('upload_page') }}" class="main-action-btn me-2">
-                    <i class="fa-solid fa-camera"></i>
-                    Scan Another Dish
-                </a>
-                <a href="/recipe?dish=Dosa&variety=plain+dosa" class="health-action-btn">
-                    <i class="fa-solid fa-book-open"></i>
-                    Explore Recipes
-                </a>
-            </div>
+            <p class="text-muted">
+                Ingredient information is not available for this recipe.
+            </p>
 
         {% endif %}
+    </section>
 
+    <!-- Cooking instructions -->
+    <section class="content-card">
+        <h4 class="section-title">
+            <i class="fa-solid fa-list-ol me-2"></i>
+            Cooking Instructions
+        </h4>
+
+        {% if recipe.instructions %}
+
+            {% if recipe.instructions is string %}
+
+                <p class="mb-0" style="white-space: pre-line;">{{ recipe.instructions }}</p>
+
+            {% else %}
+
+                {% for step in recipe.instructions %}
+                    <div class="instruction-item">
+                        <div class="step-number">
+                            {{ loop.index }}
+                        </div>
+
+                        <div>{{ step }}</div>
+                    </div>
+                {% endfor %}
+
+            {% endif %}
+
+        {% elif recipe.steps %}
+
+            {% if recipe.steps is string %}
+
+                <p class="mb-0" style="white-space: pre-line;">{{ recipe.steps }}</p>
+
+            {% else %}
+
+                {% for step in recipe.steps %}
+                    <div class="instruction-item">
+                        <div class="step-number">
+                            {{ loop.index }}
+                        </div>
+
+                        <div>{{ step }}</div>
+                    </div>
+                {% endfor %}
+
+            {% endif %}
+
+        {% else %}
+
+            <p class="text-muted">
+                Cooking instructions are not available for this recipe.
+            </p>
+
+        {% endif %}
+    </section>
+
+    <!-- Recipe source -->
+    {% if recipe.source_url and (recipe.source_url.startswith('https://') or recipe.source_url.startswith('http://')) %}
+        <section class="content-card">
+            <h5 class="section-title">
+                <i class="fa-solid fa-link me-2"></i>
+                Recipe Source
+            </h5>
+
+            <a href="{{ recipe.source_url }}"
+               target="_blank"
+               rel="noopener noreferrer">
+                View original recipe
+                <i class="fa-solid fa-arrow-up-right-from-square ms-1"></i>
+            </a>
+        </section>
+    {% endif %}
+
+    <!-- Back button -->
+    <div class="text-center mb-4">
+        <a href="/" class="btn back-button">
+            <i class="fa-solid fa-arrow-left me-2"></i>
+            Back to Home
+        </a>
     </div>
+
 </main>
 
-<!-- =================================================
-     FLOATING COOKING ASSISTANT CHATBOT WIDGET
-================================================== -->
-{% if recipe.found %}
-<script>
-    /* Pass recipe context to chatbot as JSON */
-    var RECIPE_CONTEXT = {{ recipe | tojson }};
-</script>
-{% else %}
-<script>var RECIPE_CONTEXT = null;</script>
-{% endif %}
-
-<!-- Floating Chat Button -->
-<button id="chatToggleBtn" class="chat-toggle-btn" title="Ask the Cooking Assistant">
-    <i class="fa-solid fa-comments"></i>
-    <span class="chat-badge">AI</span>
-</button>
-
-<!-- Chat Widget Panel -->
-<div id="chatWidget" class="chat-widget d-none">
-    <div class="chat-widget-header">
-        <div>
-            <i class="fa-solid fa-robot me-2"></i>
-            <strong>Cooking Assistant</strong>
-        </div>
-        <button id="chatCloseBtn" class="chat-close-btn">&times;</button>
+<!-- Footer -->
+<footer>
+    <div class="container">
+        Smart Recipe Finder
+        <span class="mx-2">|</span>
+        Recipe recommendations and ingredient insights
     </div>
-    <div id="chatMessages" class="chat-messages">
-        <div class="chat-bubble bot-bubble">
-            ðŸ‘‹ Hi! I'm your Cooking Assistant. Ask me anything about this recipe â€” ingredients, steps, timing, or tips!
-        </div>
-    </div>
-    <div class="chat-input-area">
-        <input type="text" id="chatInput" class="chat-input" placeholder="Ask about this recipe...">
-        <button id="chatSendBtn" class="chat-send-btn">
-            <i class="fa-solid fa-paper-plane"></i>
-        </button>
-    </div>
-</div>
+</footer>
 
-<!-- Bootstrap JS -->
+<!-- Bootstrap JavaScript -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- jQuery (needed for recipe search & chatbot AJAX) -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
+<!-- Set nutrition progress bar widths without dynamic CSS in the HTML template -->
 <script>
-/* =========================================================
-   Recipe Page: Search + Chatbot Widget
-========================================================= */
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".nutrition-progress-bar[data-score]").forEach(function (bar) {
+        const score = Number(bar.dataset.score);
 
-// --- Recipe Search ---
-function renderSearchCards(results) {
-    var $container = $("#recipeSearchResults");
-    $container.empty();
-    if (!results || results.length === 0) {
-        $container.html('<p class="text-muted">No recipes found. Try a different search term.</p>');
-        return;
-    }
-    results.forEach(function(r) {
-        var imgHtml = r.image_url
-            ? '<img src="' + r.image_url + '" alt="' + r.name + '" class="flashcard-img">'
-            : '<div class="flashcard-img-placeholder"><i class="fa-solid fa-bowl-food"></i></div>';
-
-        var card = '<a href="/recipe?dish=' + encodeURIComponent(r.matched_dish || r.name) +
-                   '&variety=' + encodeURIComponent(r.predicted_variety || '') +
-                   '" class="flashcard-link">' +
-                   '<div class="flashcard">' + imgHtml +
-                   '<div class="flashcard-body">' +
-                   '<div class="flashcard-name">' + r.name + '</div>' +
-                   '<div class="flashcard-meta">' + (r.cuisine || '') +
-                   (r.diet ? ' &bull; ' + r.diet : '') + '</div>' +
-                   '<span class="flashcard-btn">View Recipe</span>' +
-                   '</div></div></a>';
-        $container.append(card);
-    });
-}
-
-function doRecipeSearch() {
-    var q = $("#recipeSearchInput").val().trim();
-    if (!q) return;
-    $.getJSON("/api/search_recipes", { q: q }, function(data) {
-        renderSearchCards(data.results);
-    }).fail(function() {
-        $("#recipeSearchResults").html('<p class="text-danger">Search failed. Please try again.</p>');
-    });
-}
-
-$("#recipeSearchBtn").on("click", doRecipeSearch);
-$("#recipeSearchInput").on("keydown", function(e) {
-    if (e.key === "Enter") doRecipeSearch();
-});
-
-// --- Chatbot Widget ---
-$("#chatToggleBtn").on("click", function() {
-    $("#chatWidget").toggleClass("d-none");
-    if (!$("#chatWidget").hasClass("d-none")) {
-        $("#chatInput").focus();
-    }
-});
-
-$("#chatCloseBtn").on("click", function() {
-    $("#chatWidget").addClass("d-none");
-});
-
-function appendBubble(text, isBot) {
-    var cls = isBot ? "bot-bubble" : "user-bubble";
-    var html = '<div class="chat-bubble ' + cls + '">' + $('<span>').text(text).html() + '</div>';
-    $("#chatMessages").append(html);
-    $("#chatMessages").scrollTop($("#chatMessages")[0].scrollHeight);
-}
-
-function sendChatMessage() {
-    var msg = $("#chatInput").val().trim();
-    if (!msg) return;
-    appendBubble(msg, false);
-    $("#chatInput").val("");
-
-    // Show typing indicator
-    var $typing = $('<div class="chat-bubble bot-bubble typing-indicator">Thinking...</div>');
-    $("#chatMessages").append($typing);
-    $("#chatMessages").scrollTop($("#chatMessages")[0].scrollHeight);
-
-    $.ajax({
-        url: "/api/chat",
-        type: "POST",
-        contentType: "application/json",
-        data: JSON.stringify({ message: msg, recipe_context: RECIPE_CONTEXT }),
-        success: function(res) {
-            $typing.remove();
-            appendBubble(res.reply || "Sorry, I could not understand that.", true);
-        },
-        error: function() {
-            $typing.remove();
-            appendBubble("The cooking assistant is temporarily unavailable.", true);
+        if (Number.isFinite(score)) {
+            const safeScore = Math.max(0, Math.min(100, score));
+            bar.style.width = safeScore + "%";
+            bar.setAttribute("aria-valuenow", String(safeScore));
         }
     });
-}
-
-$("#chatSendBtn").on("click", sendChatMessage);
-$("#chatInput").on("keydown", function(e) {
-    if (e.key === "Enter") sendChatMessage();
 });
 </script>
 
 </body>
 </html>
-

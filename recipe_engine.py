@@ -1,386 +1,447 @@
-﻿"""
-recipe_engine.py
-Smart Recipe Finder - Recipe Retrieval, Fallback & Search Engine
-Uses 'all_varieties_recipe_with_official_source_verification.csv' as the SOLE recipe dataset.
-Does NOT modify or regenerate the dataset.
+﻿
+"""Smart Recipe Finder recipe retrieval, parsing, search, and fallbacks.
+
+The source recipe CSV is read-only. Lookup helper columns are
+created in memory and are not written back to the CSV.
 """
 
 import os
 import re
 import urllib.parse
+
 import pandas as pd
 
-# Path to the immutable recipe dataset
+from ingredient_insights import ingredient_insights
+
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATASET_PATH = os.path.join(BASE_DIR, "all_varieties_recipe_with_official_source_verification.csv")
+
+DATASET_PATH = os.path.join(
+    BASE_DIR,
+    "all_varieties_recipe_with_official_source_verification.csv",
+)
+
 IMAGES_DIR = os.path.join(BASE_DIR, "images")
 
-# Maintainable mapping of related dishes for fallback suggestions
+
 RELATED_DISHES_MAP = {
     "dosa": [
-        "plain dosa", "masala dosa", "rava dosa", "set dosa", "onion dosa", "mysore masala dosa"
+        "plain dosa", "masala dosa", "rava dosa",
+        "set dosa", "onion dosa", "mysore masala dosa",
     ],
     "biryani": [
-        "chicken biryani", "hyderabadi biryani", "vegetable biryani", "egg biryani", "mutton biryani"
+        "chicken biryani", "hyderabadi biryani",
+        "vegetable biryani", "egg biryani", "mutton biryani",
     ],
     "samosa": [
-        "aloo samosa", "vegetable samosa", "paneer samosa", "chicken samosa", "corn samosa"
+        "aloo samosa", "vegetable samosa", "paneer samosa",
+        "chicken samosa", "corn samosa",
     ],
     "idli": [
-        "plain idli", "rava idli", "fried idli", "thatte idli", "kanchipuram idli"
+        "plain idli", "rava idli", "fried idli",
+        "thatte idli", "kanchipuram idli",
     ],
     "paratha": [
-        "aloo paratha", "plain aloo paratha", "stuffed aloo paratha", "crispy aloo paratha", "buttery aloo paratha"
+        "aloo paratha", "plain aloo paratha",
+        "stuffed aloo paratha", "crispy aloo paratha",
+        "buttery aloo paratha",
     ],
     "dhokla": [
-        "khaman dhokla", "khatta dhokla", "rava dhokla", "sandwich dhokla", "white dhokla"
+        "khaman dhokla", "khatta dhokla", "rava dhokla",
+        "sandwich dhokla", "white dhokla",
     ],
     "paneer": [
-        "kadai paneer", "palak paneer", "paneer butter masala", "paneer tikka masala"
+        "kadai paneer", "palak paneer",
+        "paneer butter masala", "paneer tikka masala",
     ],
     "kofta": [
-        "classic malai kofta", "paneer malai kofta", "vegetable malai kofta"
-    ]
+        "classic malai kofta", "paneer malai kofta",
+        "vegetable malai kofta",
+    ],
 }
 
 
+def _clean(value):
+    """Convert a value to a clean string."""
+    if value is None:
+        return ""
+
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+
+    return str(value).strip()
+
+
+def _clean_key(value):
+    """Normalize a string for matching."""
+    value = urllib.parse.unquote(_clean(value))
+    value = value.lower().replace("_", " ")
+    return re.sub(r"\s+", " ", value).strip()
+
+
 class RecipeEngine:
+    """Load, search, and format recipes."""
+
     def __init__(self, csv_path=DATASET_PATH):
         self.csv_path = csv_path
         self.df = None
         self.load_dataset()
 
     def load_dataset(self):
-        """Loads all_varieties_recipe_with_official_source_verification.csv without modifying it."""
-        if not os.path.exists(self.csv_path):
-            raise FileNotFoundError(f"Recipe dataset not found at: {self.csv_path}")
+        """Load the CSV and create lookup columns in memory."""
+        if not os.path.isfile(self.csv_path):
+            raise FileNotFoundError(
+                f"Recipe dataset not found at: {self.csv_path}"
+            )
 
-        # Read the CSV as-is
         self.df = pd.read_csv(self.csv_path)
 
-        # Normalize lookup columns in memory for fast, case-insensitive matching
+        required = [
+            "matched_dish",
+            "predicted_variety",
+            "name",
+        ]
+
+        missing = [
+            column
+            for column in required
+            if column not in self.df.columns
+        ]
+
+        if missing:
+            raise ValueError(
+                "Recipe dataset is missing required columns: "
+                + ", ".join(missing)
+            )
+
+        optional_columns = [
+            "description",
+            "cuisine",
+            "course",
+            "diet",
+            "prep_time",
+            "cooking_time",
+            "servings",
+            "image_url",
+            "ingredients",
+            "instructions",
+            "source",
+            "source_url",
+        ]
+
+        for column in optional_columns:
+            if column not in self.df.columns:
+                self.df[column] = ""
+
         self.df["matched_dish_clean"] = (
-            self.df["matched_dish"]
-            .astype(str)
-            .str.strip()
-            .str.lower()
-            .str.replace("_", " ")
+            self.df["matched_dish"].map(_clean_key)
         )
         self.df["predicted_variety_clean"] = (
-            self.df["predicted_variety"]
-            .astype(str)
-            .str.strip()
-            .str.lower()
-            .str.replace("_", " ")
+            self.df["predicted_variety"].map(_clean_key)
         )
-        self.df["name_clean"] = (
-            self.df["name"].astype(str).str.strip().str.lower()
+        self.df["name_clean"] = self.df["name"].map(_clean_key)
+        self.df["cuisine_clean"] = self.df["cuisine"].map(_clean_key)
+
+        print(
+            f"[RecipeEngine] Loaded {len(self.df)} recipes "
+            f"from {os.path.basename(self.csv_path)}"
         )
 
     def parse_ingredients(self, raw_ingredients):
-        """
-        Parses existing ingredients field into a clean, structured list.
-        Returns: [{'amount': '2 cups', 'name': 'Bajra Flour ( Pearl Millet)'}, ...]
-        """
-        if pd.isna(raw_ingredients) or not str(raw_ingredients).strip():
+        """Parse ingredient lines and attach nutrition and alternatives."""
+        if raw_ingredients is None:
             return []
 
-        lines = str(raw_ingredients).split("\n")
-        ingredients_list = []
+        try:
+            if pd.isna(raw_ingredients):
+                return []
+        except (TypeError, ValueError):
+            pass
+
+        raw_text = _clean(raw_ingredients)
+
+        if not raw_text:
+            return []
+
+        lines = (
+            raw_text.replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .split("\n")
+        )
+
+        output = []
+
+        quantity_re = re.compile(
+            r"^(?P<number>"
+            r"\d+\s+\d+/\d+|"
+            r"\d+/\d+|"
+            r"\d+(?:\.\d+)?|"
+            r"½|¼|¾"
+            r")"
+            r"(?:\s*(?P<unit>"
+            r"cups?|tablespoons?|tbsp|teaspoons?|tsp|"
+            r"sprigs?|grams?|g|kg|ml|"
+            r"millilit(?:er|re)s?|lit(?:er|re)s?|"
+            r"cloves?|pieces?|pinches?|inches?|"
+            r"bunch(?:es)?|leaves|medium|large|small"
+            r"))?"
+            r"\s+(?P<name>.+)$",
+            re.IGNORECASE,
+        )
 
         for line in lines:
-            # Clean tabs and excessive whitespace
-            line = re.sub(r"\s+", " ", line).strip()
-            # Clean comma spacing
-            line = re.sub(r"\s*,\s*", ", ", line).strip(" ,")
+            line = re.sub(r"\s+", " ", line)
+            line = line.strip().strip(" ,;•-")
 
-            if not line or len(line) < 2:
+            if len(line) < 2:
                 continue
 
-            # Skip section header strings if present
             if line.lower().startswith(
-                ("ingredients for", "for the ", "to serve", "main ingredients")
+                (
+                    "ingredients for",
+                    "for the ",
+                    "to serve",
+                    "main ingredients",
+                    "method:",
+                    "instructions:",
+                )
             ):
                 continue
 
-            # Regex to cleanly separate leading quantity/measurement from ingredient name
-            match = re.match(
-                r"^((?:\d+(?:[-/]\d+)?|\d*\.\d+)?\s*(?:cups?|teaspoons?|tsp|tablespoons?|tbsp|sprigs?|grams?|g|kg|pinch|inches?|cloves?|pieces?|bunch|leaves)?)\s*(.*)$",
-                line,
-                re.IGNORECASE,
-            )
+            match = quantity_re.match(line)
 
-            if match and match.group(1).strip() and match.group(2).strip():
-                amount = match.group(1).strip()
-                name = match.group(2).strip()
+            if match:
+                amount = " ".join(
+                    part
+                    for part in (
+                        match.group("number"),
+                        match.group("unit") or "",
+                    )
+                    if part
+                ).strip()
+
+                name = match.group("name").strip(" ,.;")
             else:
                 amount = ""
-                name = line
+                name = line.strip(" ,.;")
 
-            ingredients_list.append({"amount": amount, "name": name})
+            if not name:
+                continue
 
-        return ingredients_list
+            try:
+                nutrition = ingredient_insights.get_health_score(name)
+            except Exception as exc:
+                print(
+                    f"[RecipeEngine] Nutrition lookup failed for "
+                    f"{name!r}: {exc}"
+                )
+                nutrition = {
+                    "available": False,
+                    "score": None,
+                    "label": "Unavailable",
+                    "score_type": "unavailable",
+                }
 
-    def parse_instructions(self, raw_instructions):
-        """Parses existing instructions field into clean, readable numbered steps."""
-        if pd.isna(raw_instructions) or not str(raw_instructions).strip():
-            return []
+            try:
+                alternatives = ingredient_insights.get_alternatives(
+                    name,
+                    limit=3,
+                )
+            except Exception as exc:
+                print(
+                    f"[RecipeEngine] Alternative lookup failed for "
+                    f"{name!r}: {exc}"
+                )
+                alternatives = []
 
-        raw = str(raw_instructions)
-        # Fix run-on sentences where a dot is directly followed by a capital letter without space
-        raw = re.sub(r"\.([A-Z])", r". \1", raw)
-        raw = re.sub(r"\s+", " ", raw).strip()
+            output.append(
+                {
+                    "amount": amount,
+                    "name": name,
+                    "nutrition": nutrition,
+                    "alternatives": alternatives,
+                }
+            )
 
-        # Split steps by periods followed by capital letters, numbers, or end of line
-        raw_steps = re.split(r"(?<=\.)\s+(?=[A-Z0-9])", raw)
-        steps_list = []
+        return output
 
-        for step in raw_steps:
-            step = step.strip()
-            # Strip any pre-existing step prefix (e.g. "1.", "Step 1:")
-            step = re.sub(r"^(?:\d+\.|\d+\)|\bstep\s*\d+:?)\s*", "", step, flags=re.I)
-            if len(step) > 4:
-                steps_list.append(step)
+    def _format_recipe_dict(self, row):
+        """Convert a recipe row to a dictionary for the recipe page."""
+        instructions = _clean(row.get("instructions", ""))
 
-        return steps_list
+        steps = [
+            step.strip()
+            for step in re.split(r"\n+", instructions)
+            if step.strip()
+        ]
 
-    def resolve_image_url(self, raw_image_url):
-        """
-        Safely resolves local Windows image paths from CSV for Flask browser display.
-        Returns: '/dataset_images/<path>' or None if no valid image exists.
-        Does NOT expose raw invalid filesystem paths to browser HTML.
-        """
-        if pd.isna(raw_image_url) or not str(raw_image_url).strip():
+        dish = _clean(row.get("matched_dish", ""))
+        variety = _clean(row.get("predicted_variety", ""))
+        name = _clean(row.get("name", ""))
+
+        return {
+            "name": name or variety or dish or "Recipe",
+            "dish": dish,
+            "variety": variety,
+            "matched_dish": dish,
+            "predicted_variety": variety,
+            "description": _clean(row.get("description", "")),
+            "cuisine": _clean(row.get("cuisine", "")),
+            "course": _clean(row.get("course", "")),
+            "diet": _clean(row.get("diet", "")),
+            "prep_time": _clean(row.get("prep_time", "")),
+            "preparation_time": _clean(row.get("prep_time", "")),
+            "cooking_time": _clean(row.get("cooking_time", "")),
+            "servings": _clean(row.get("servings", "")),
+            "image_url": _clean(row.get("image_url", "")),
+            "ingredients": self.parse_ingredients(
+                row.get("ingredients", "")
+            ),
+            "instructions": instructions,
+            "steps": steps,
+            "source": _clean(row.get("source", "")),
+            "source_url": _clean(row.get("source_url", "")),
+        }
+
+    def get_recipe(
+        self,
+        dish=None,
+        variety=None,
+        top_predictions=None,
+        *args,
+        **kwargs,
+    ):
+        """Find a recipe using the dish, variety, or image predictions."""
+        if self.df is None or self.df.empty:
             return None
 
-        paths = [p.strip() for p in str(raw_image_url).split(";") if p.strip()]
+        # First, try the requested variety.
+        variety_key = _clean_key(variety)
 
-        for path in paths:
-            normalized_path = os.path.normpath(path)
-            if os.path.exists(normalized_path) and os.path.isfile(normalized_path):
-                try:
-                    rel_path = os.path.relpath(normalized_path, IMAGES_DIR)
-                    rel_path_web = rel_path.replace("\\", "/")
-                    return f"/dataset_images/{urllib.parse.quote(rel_path_web)}"
-                except ValueError:
+        if variety_key:
+            matches = self.df[
+                self.df["predicted_variety_clean"] == variety_key
+            ]
+
+            if not matches.empty:
+                return self._format_recipe_dict(matches.iloc[0])
+
+            matches = self.df[
+                self.df["name_clean"] == variety_key
+            ]
+
+            if not matches.empty:
+                return self._format_recipe_dict(matches.iloc[0])
+
+        # Next, try the requested dish.
+        dish_key = _clean_key(dish)
+
+        if dish_key:
+            matches = self.df[
+                self.df["matched_dish_clean"] == dish_key
+            ]
+
+            if not matches.empty:
+                return self._format_recipe_dict(matches.iloc[0])
+
+            matches = self.df[
+                (self.df["predicted_variety_clean"] == dish_key)
+                | (self.df["name_clean"] == dish_key)
+            ]
+
+            if not matches.empty:
+                return self._format_recipe_dict(matches.iloc[0])
+
+            # Partial matching as a fallback.
+            matches = self.df[
+                self.df["name_clean"].str.contains(
+                    re.escape(dish_key),
+                    na=False,
+                    regex=True,
+                )
+            ]
+
+            if not matches.empty:
+                return self._format_recipe_dict(matches.iloc[0])
+
+        # Finally, try image-classification predictions in order.
+        if isinstance(top_predictions, list):
+            for prediction in top_predictions:
+                if isinstance(prediction, dict):
+                    prediction_name = (
+                        prediction.get("raw_name")
+                        or prediction.get("name")
+                        or prediction.get("dish")
+                        or ""
+                    )
+                else:
+                    prediction_name = str(prediction)
+
+                prediction_key = _clean_key(prediction_name)
+
+                if not prediction_key:
                     continue
+
+                matches = self.df[
+                    (self.df["matched_dish_clean"] == prediction_key)
+                    | (
+                        self.df["predicted_variety_clean"]
+                        == prediction_key
+                    )
+                    | (self.df["name_clean"] == prediction_key)
+                ]
+
+                if not matches.empty:
+                    return self._format_recipe_dict(matches.iloc[0])
+
+                matches = self.df[
+                    self.df["name_clean"].str.contains(
+                        re.escape(prediction_key),
+                        na=False,
+                        regex=True,
+                    )
+                ]
+
+                if not matches.empty:
+                    return self._format_recipe_dict(matches.iloc[0])
 
         return None
 
-    def _format_recipe_dict(self, match_row):
-        """Helper to format a dataframe row into a clean recipe dictionary."""
-        return {
-            "found": True,
-            "name": str(match_row.get("name", "")).strip(),
-            "matched_dish": str(match_row.get("matched_dish", "")).strip(),
-            "predicted_variety": str(
-                match_row.get("predicted_variety", "")
-            ).strip(),
-            "description": "" if pd.isna(match_row.get("description")) else str(match_row.get("description", "")).strip(),
-            "cuisine": (
-                str(match_row.get("cuisine", "Indian")).strip()
-                if not pd.isna(match_row.get("cuisine"))
-                else "Indian"
-            ),
-            "course": (
-                str(match_row.get("course", "Main Course")).strip()
-                if not pd.isna(match_row.get("course"))
-                else "Main Course"
-            ),
-            "diet": (
-                str(match_row.get("diet", "Vegetarian")).strip()
-                if not pd.isna(match_row.get("diet"))
-                else "Vegetarian"
-            ),
-            "prep_time": (
-                str(match_row.get("prep_time", "30 Minutes")).strip()
-                if not pd.isna(match_row.get("prep_time"))
-                else "30 Minutes"
-            ),
-            "image_url": self.resolve_image_url(match_row.get("image_url")),
-            "ingredients": self.parse_ingredients(match_row.get("ingredients")),
-            "instructions": self.parse_instructions(match_row.get("instructions")),
-        }
-
-    def get_similar_dishes(self, dish=None, variety=None, top_predictions=None, max_cards=4):
-        """
-        Retrieves similar/alternative dish flashcards:
-        1. Uses alternative predictions from top_predictions (2nd and 3rd).
-        2. Uses RELATED_DISHES_MAP.
-        3. Uses other varieties of the same dish class in the CSV.
-        Verifies every dish exists in the CSV before adding.
-        Returns: list of 1 to max_cards (3-5) distinct flashcards.
-        """
-        if self.df is None or len(self.df) == 0:
+    def search_recipes(self, query, limit=10):
+        """Search recipe names, dishes, varieties, and cuisines."""
+        if self.df is None or self.df.empty:
             return []
 
-        flashcards = []
-        seen_recipes = set()
+        query_key = _clean_key(query)
 
-        def add_candidate(candidate_name, confidence=None):
-            if not candidate_name or len(flashcards) >= max_cards:
-                return
-            cand_clean = candidate_name.strip().lower().replace("_", " ")
-
-            # Check matching in CSV (prefer variety, then dish, then name)
-            matched_df = self.df[self.df["predicted_variety_clean"] == cand_clean]
-            if matched_df.empty:
-                matched_df = self.df[
-                    (self.df["matched_dish_clean"] == cand_clean)
-                    | (self.df["matched_dish_clean"].str.contains(re.escape(cand_clean)))
-                ]
-            if matched_df.empty:
-                matched_df = self.df[self.df["name_clean"].str.contains(re.escape(cand_clean))]
-
-            if not matched_df.empty:
-                row = matched_df.iloc[0]
-                recipe_name = str(row["name"]).strip()
-                if recipe_name not in seen_recipes:
-                    seen_recipes.add(recipe_name)
-                    flashcards.append({
-                        "name": recipe_name,
-                        "dish": str(row["matched_dish"]).strip(),
-                        "variety": str(row.get("predicted_variety", "")).strip(),
-                        "cuisine": str(row.get("cuisine", "Indian")).strip(),
-                        "prep_time": str(row.get("prep_time", "30 Minutes")).strip(),
-                        "confidence": confidence,
-                        "image_url": self.resolve_image_url(row.get("image_url")),
-                        "recipe_url": f"/recipe?dish={urllib.parse.quote(str(row['matched_dish']).strip())}&variety={urllib.parse.quote(str(row.get('predicted_variety', '')).strip())}"
-                    })
-
-        # 1. Use alternative predictions (e.g. 2nd and 3rd predictions)
-        if top_predictions and isinstance(top_predictions, list):
-            for pred in top_predictions:
-                if isinstance(pred, dict):
-                    p_name = pred.get("name") or pred.get("variety")
-                    p_conf = pred.get("match_percent") or pred.get("confidence")
-                    add_candidate(p_name, p_conf)
-                elif isinstance(pred, str):
-                    add_candidate(pred, None)
-
-        # 2. Check RELATED_DISHES_MAP
-        target_keys = []
-        if dish:
-            target_keys.append(dish.strip().lower().replace("_", " "))
-        if variety:
-            target_keys.append(variety.strip().lower().replace("_", " "))
-
-        for k in target_keys:
-            for map_key, related_list in RELATED_DISHES_MAP.items():
-                if map_key in k or k in map_key:
-                    for rel in related_list:
-                        add_candidate(rel)
-
-        # 3. Check other varieties for the same dish class in the CSV
-        if len(flashcards) < max_cards and dish:
-            d_clean = dish.strip().lower().replace("_", " ")
-            same_dish_df = self.df[
-                (self.df["matched_dish_clean"] == d_clean)
-                | (self.df["matched_dish_clean"].str.contains(re.escape(d_clean)))
-            ]
-            for _, row in same_dish_df.iterrows():
-                v_name = str(row.get("predicted_variety", "")).strip()
-                add_candidate(v_name)
-                if len(flashcards) >= max_cards:
-                    break
-
-        return flashcards[:max_cards]
-
-    def search_recipes(self, query, max_results=10):
-        """
-        Searches the existing recipe CSV across relevant fields:
-        'name', 'matched_dish', 'predicted_variety', 'cuisine'.
-        Returns matching recipe card items.
-        """
-        if not query or not str(query).strip() or self.df is None:
+        if not query_key:
             return []
 
-        q = str(query).strip().lower()
-        # Case-insensitive substring search across clean columns
-        matches = self.df[
-            self.df["name_clean"].str.contains(re.escape(q))
-            | self.df["matched_dish_clean"].str.contains(re.escape(q))
-            | self.df["predicted_variety_clean"].str.contains(re.escape(q))
-            | self.df["cuisine"].astype(str).str.lower().str.contains(re.escape(q))
+        mask = (
+            self.df["name_clean"].str.contains(
+                re.escape(query_key), na=False, regex=True
+            )
+            | self.df["matched_dish_clean"].str.contains(
+                re.escape(query_key), na=False, regex=True
+            )
+            | self.df["predicted_variety_clean"].str.contains(
+                re.escape(query_key), na=False, regex=True
+            )
+            | self.df["cuisine_clean"].str.contains(
+                re.escape(query_key), na=False, regex=True
+            )
+        )
+
+        results = self.df.loc[mask].head(max(1, int(limit)))
+
+        return [
+            self._format_recipe_dict(row)
+            for _, row in results.iterrows()
         ]
 
-        results = []
-        for _, row in matches.head(max_results).iterrows():
-            results.append({
-                "name": str(row["name"]).strip(),
-                "dish": str(row["matched_dish"]).strip(),
-                "variety": str(row.get("predicted_variety", "")).strip(),
-                "cuisine": str(row.get("cuisine", "Indian")).strip(),
-                "prep_time": str(row.get("prep_time", "30 Minutes")).strip(),
-                "diet": str(row.get("diet", "Vegetarian")).strip(),
-                "image_url": self.resolve_image_url(row.get("image_url")),
-                "recipe_url": f"/recipe?dish={urllib.parse.quote(str(row['matched_dish']).strip())}&variety={urllib.parse.quote(str(row.get('predicted_variety', '')).strip())}"
-            })
 
-        return results
-
-    def get_recipe(self, query=None, dish=None, variety=None, top_predictions=None):
-        """
-        Retrieves recipe:
-        1. Prefers matching 'predicted_variety'
-        2. Falls back to matching 'matched_dish'
-        3. Falls back to partial match in recipe 'name'
-        4. If not found, attaches available alternative flashcards via get_similar_dishes.
-        """
-        if self.df is None or len(self.df) == 0:
-            return {
-                "found": False,
-                "message": "Recipe dataset is not available or empty.",
-                "alternatives": []
-            }
-
-        search_variety = (variety or query or "").strip().lower().replace("_", " ")
-        search_dish = (dish or query or "").strip().lower().replace("_", " ")
-
-        match_row = None
-
-        # 1. Prefer matching predicted_variety
-        if search_variety:
-            matched_df = self.df[self.df["predicted_variety_clean"] == search_variety]
-            if not matched_df.empty:
-                match_row = matched_df.iloc[0]
-
-        # 2. Fallback: match matched_dish
-        if match_row is None and search_dish:
-            matched_df = self.df[
-                (self.df["matched_dish_clean"] == search_dish)
-                | (self.df["matched_dish_clean"].str.contains(re.escape(search_dish)))
-            ]
-            if not matched_df.empty:
-                match_row = matched_df.iloc[0]
-
-        # 3. Fallback: partial search on name
-        if match_row is None and (search_variety or search_dish):
-            term = search_variety or search_dish
-            matched_df = self.df[self.df["name_clean"].str.contains(re.escape(term))]
-            if not matched_df.empty:
-                match_row = matched_df.iloc[0]
-
-        # 4. Recipe Not Found -> Gather alternatives
-        if match_row is None:
-            display_name = variety or dish or query or "Unknown Dish"
-            alternatives = self.get_similar_dishes(
-                dish=dish,
-                variety=variety,
-                top_predictions=top_predictions,
-                max_cards=4
-            )
-            return {
-                "found": False,
-                "query": display_name,
-                "message": f"Recipe unavailable for \"{display_name}\".",
-                "alternatives": alternatives
-            }
-
-        # Format and return the found recipe
-        return self._format_recipe_dict(match_row)
-
-
-# Singleton instance
+# IMPORTANT: This instance must be created outside the class.
 recipe_engine = RecipeEngine()
-
