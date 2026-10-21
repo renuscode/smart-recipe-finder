@@ -1,5 +1,4 @@
-﻿```html
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -88,6 +87,34 @@
             border-radius: 9px;
             padding: 14px;
             margin-top: 12px;
+        }
+
+        .recognized-food-image {
+            width: 100%;
+            max-height: 290px;
+            object-fit: cover;
+            border: 3px solid rgba(255,255,255,.75);
+            border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(0,0,0,.18);
+            background: rgba(255,255,255,.12);
+        }
+
+        .alternative-options[hidden] {
+            display: none !important;
+        }
+
+        .health-result {
+            border: 1px solid #d8e9df;
+            border-radius: 12px;
+            padding: 18px;
+            background: #f2faf5;
+        }
+
+        .overall-score {
+            color: #176b4d;
+            font-size: 2.4rem;
+            line-height: 1.2;
+            font-weight: 800;
         }
 
         .substitution-panel h6 {
@@ -182,27 +209,39 @@
 
     <!-- Recipe heading -->
     <section class="page-header">
-        <h1 class="fw-bold">
-            {{ recipe.name or recipe.dish or "Recipe Details" }}
-        </h1>
+        <div class="row align-items-center g-4">
+            <div class="col-12 {% if user_image %}col-md-7{% else %}col-md-12{% endif %}">
+                <h1 class="fw-bold">
+                    {{ recipe.name or recipe.dish or "Recipe Details" }}
+                </h1>
 
-        {% if recipe.variety %}
-            <p class="mb-2">
-                <i class="fa-solid fa-bowl-food me-2"></i>
-                {{ recipe.variety }}
-            </p>
-        {% endif %}
+                {% if recipe.variety %}
+                    <p class="mb-2">
+                        <i class="fa-solid fa-bowl-food me-2"></i>
+                        {{ recipe.variety }}
+                    </p>
+                {% endif %}
 
-        {% if recipe.description %}
-            <p class="mb-0">{{ recipe.description }}</p>
-        {% endif %}
+                {% if recipe.description %}
+                    <p class="mb-0">{{ recipe.description }}</p>
+                {% endif %}
 
-        {% if recipe.source %}
-            <p class="mt-3 mb-0 small">
-                <i class="fa-solid fa-book-open me-1"></i>
-                Source: {{ recipe.source }}
-            </p>
-        {% endif %}
+                {% if recipe.source %}
+                    <p class="mt-3 mb-0 small">
+                        <i class="fa-solid fa-book-open me-1"></i>
+                        Source: {{ recipe.source }}
+                    </p>
+                {% endif %}
+            </div>
+            {% if user_image %}
+                <div class="col-12 col-md-5">
+                    <img src="{{ user_image|e }}" alt="Recognized food image: {{ recipe.name or recipe.dish or 'food' }}"
+                         class="img-fluid recognized-food-image"
+                         onerror="this.closest('.col-12').style.display='none';">
+                    <div class="small mt-2 text-white-50">Your recognized food image</div>
+                </div>
+            {% endif %}
+        </div>
     </section>
 
     <!-- Recipe information -->
@@ -253,194 +292,81 @@
         </div>
     </section>
 
-    <!-- Ingredients and nutrition -->
-    <section class="content-card">
+    <!-- Ingredients and alternatives -->
+    <section class="content-card" id="ingredients-section">
         <h4 class="section-title">
             <i class="fa-solid fa-carrot me-2"></i>
-            Ingredients and Nutrition Scores
+            Ingredients and Alternatives
         </h4>
 
         {% if recipe.ingredients %}
-
             {% for item in recipe.ingredients %}
-                <div class="ingredient-item">
-
-                    <!-- Ingredient name and quantity -->
+                {% set ingredient_index = loop.index %}
+                <div class="ingredient-item" data-original-ingredient="{{ item.name|e }}">
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                        <div>
+                        <div class="flex-grow-1">
                             <div class="ingredient-name">
                                 <i class="fa-solid fa-leaf text-success me-2"></i>
                                 {{ item.name }}
                             </div>
-
                             {% if item.amount %}
-                                <div class="ingredient-amount mt-1">
-                                    Amount: {{ item.amount }}
-                                </div>
+                                <div class="ingredient-amount mt-1">Amount: {{ item.amount }}</div>
                             {% endif %}
                         </div>
                     </div>
 
-                    <!-- Nutrition score -->
-                    <div class="nutrition-panel">
-                        <strong>
-                            <i class="fa-solid fa-heart-pulse me-1"></i>
-                            Nutrition Score
-                        </strong>
-
-                        {% if item.nutrition is defined and item.nutrition and item.nutrition.available and item.nutrition.score is not none %}
-
-                            <div class="d-flex justify-content-between mt-2 mb-1">
-                                <span>
-                                    {{ item.nutrition.label or "Provisional nutrition score" }}
-                                </span>
-
-                                <strong>
-                                    {{ item.nutrition.score }}/100
-                                </strong>
-                            </div>
-
-                            <div class="progress"
-                                 role="progressbar"
-                                 aria-label="Provisional nutrition score"
-                                 aria-valuenow="{{ item.nutrition.score }}"
-                                 aria-valuemin="0"
-                                 aria-valuemax="100">
-
-                                <div class="progress-bar bg-success nutrition-progress-bar"
-                                     data-score="{{ item.nutrition.score }}">
-                                </div>
-                            </div>
-
-                            <small class="text-muted d-block mt-2">
-                                This is a provisional model-generated score,
-                                not a medically validated health rating.
-                            </small>
-
-                        {% else %}
-
-                            <p class="text-muted mb-0 mt-2">
-                                Nutrition score unavailable for this ingredient
-                                because a suitable matching nutrition record
-                                was not found.
-                            </p>
-
-                        {% endif %}
+                    <div class="substitution-panel mt-3 alternative-options" hidden>
+                        <div class="form-label fw-semibold mb-2">
+                            <i class="fa-solid fa-arrows-rotate me-2"></i>Alternative ingredients
+                        </div>
+                        <!-- Hidden select keeps the selected value connected to the save and health-score logic. -->
+                        <select class="form-select ingredient-alternative d-none"
+                                id="alternative-{{ loop.index }}"
+                                data-original="{{ item.name|e }}" aria-hidden="true" tabindex="-1">
+                            <option value="" {% if not saved_substitutions.get(normalize_name(item.name), '') %}selected{% endif %}>{{ item.name }}</option>
+                            {% if item.alternatives %}
+                                {% for alt in item.alternatives %}
+                                    <option value="{{ alt.ingredient|e }}"
+                                        {% if saved_substitutions.get(normalize_name(item.name), '') == alt.ingredient %}selected{% endif %}>{{ alt.ingredient }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        <ul class="list-group alternative-list">
+                            <li class="list-group-item p-0">
+                                <button type="button"
+                                        class="list-group-item list-group-item-action alternative-choice {% if not saved_substitutions.get(normalize_name(item.name), '') %}active{% endif %}"
+                                        data-select-id="alternative-{{ loop.index }}" data-value="">
+                                    <i class="fa-solid fa-check me-2"></i>Keep original: {{ item.name }}
+                                </button>
+                            </li>
+                            {% if item.alternatives %}
+                                {% for alt in item.alternatives %}
+                                    <li class="list-group-item p-0">
+                                        <button type="button"
+                                                class="list-group-item list-group-item-action alternative-choice {% if saved_substitutions.get(normalize_name(item.name), '') == alt.ingredient %}active{% endif %}"
+                                                data-select-id="alternative-{{ ingredient_index }}" data-value="{{ alt.ingredient|e }}">
+                                            {{ alt.ingredient }}
+                                        </button>
+                                    </li>
+                                {% endfor %}
+                            {% endif %}
+                        </ul>
                     </div>
-
-                    <!-- Ingredient alternatives -->
-                    <div class="substitution-panel">
-                        <h6>
-                            <i class="fa-solid fa-arrows-rotate me-2"></i>
-                            Possible Ingredient Alternatives
-                        </h6>
-
-                        {% if item.alternatives %}
-
-                            {% for alt in item.alternatives %}
-                                <div class="border rounded bg-white p-3 mb-3">
-
-                                    <div class="fw-bold">
-                                        {{ alt.ingredient }}
-                                    </div>
-
-                                    {% if alt.substitution_type %}
-                                        <span class="badge-soft">
-                                            {{ alt.substitution_type }}
-                                        </span>
-                                    {% endif %}
-
-                                    {% if alt.quantity_guidance %}
-                                        <p class="mt-2 mb-1">
-                                            <strong>Quantity:</strong>
-                                            {{ alt.quantity_guidance }}
-                                        </p>
-                                    {% endif %}
-
-                                    {% if alt.usage_notes %}
-                                        <p class="mb-1">
-                                            <strong>Usage notes:</strong>
-                                            {{ alt.usage_notes }}
-                                        </p>
-                                    {% endif %}
-
-                                    {% if alt.taste_texture_change %}
-                                        <p class="mb-1">
-                                            <strong>Taste or texture:</strong>
-                                            {{ alt.taste_texture_change }}
-                                        </p>
-                                    {% endif %}
-
-                                    {% if alt.nutritional_rationale %}
-                                        <p class="mb-1">
-                                            <strong>Nutritional rationale:</strong>
-                                            {{ alt.nutritional_rationale }}
-                                        </p>
-                                    {% endif %}
-
-                                    {% if alt.dietary_notes %}
-                                        <p class="mb-1">
-                                            <strong>Dietary notes:</strong>
-                                            {{ alt.dietary_notes }}
-                                        </p>
-                                    {% endif %}
-
-                                    {% if alt.evidence_confidence %}
-                                        <p class="mb-1">
-                                            <strong>Evidence confidence:</strong>
-                                            {{ alt.evidence_confidence }}
-                                        </p>
-                                    {% endif %}
-
-                                    {% if alt.source_name %}
-                                        <p class="mb-1">
-                                            <strong>Source:</strong>
-                                            {{ alt.source_name }}
-                                        </p>
-                                    {% endif %}
-
-                                    {% if alt.source_url and (alt.source_url.startswith('https://') or alt.source_url.startswith('http://')) %}
-                                        <a href="{{ alt.source_url }}"
-                                           target="_blank"
-                                           rel="noopener noreferrer">
-                                            View source
-                                            <i class="fa-solid fa-arrow-up-right-from-square ms-1"></i>
-                                        </a>
-                                    {% endif %}
-
-                                </div>
-                            {% endfor %}
-
-                            <div class="notice">
-                                <i class="fa-solid fa-triangle-exclamation me-1"></i>
-
-                                <strong>Important:</strong>
-                                Alternatives may be conditional. Check the
-                                quantity, cooking method, allergies, dietary
-                                restrictions and source information before use.
-                                A substitute may change the taste, texture or
-                                nutritional content of the recipe.
-                            </div>
-
-                        {% else %}
-
-                            <p class="text-muted mb-0">
-                                No matching alternative found in the
-                                substitution dataset for this ingredient.
-                            </p>
-
-                        {% endif %}
-                    </div>
-
                 </div>
             {% endfor %}
 
+            <div class="mt-4">
+                <button type="button" class="btn btn-success btn-lg" id="view-health-score">
+                    <i class="fa-solid fa-heart-pulse me-2"></i>View Health Score
+                </button>
+                <div id="substitution-status" class="small mt-2" role="status" aria-live="polite"></div>
+                <div id="health-score-result" class="health-result mt-3" hidden aria-live="polite">
+                    <h5 class="mb-2"><i class="fa-solid fa-heart-pulse text-success me-2"></i>Recipe Health Score</h5>
+                    <div id="overall-score-value" class="overall-score">--/100</div>
+                </div>
+            </div>
         {% else %}
-
-            <p class="text-muted">
-                Ingredient information is not available for this recipe.
-            </p>
-
+            <p class="text-muted">Ingredient information is not available for this recipe.</p>
         {% endif %}
     </section>
 
@@ -539,20 +465,100 @@
 <!-- Bootstrap JavaScript -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Set nutrition progress bar widths without dynamic CSS in the HTML template -->
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    document.querySelectorAll(".nutrition-progress-bar[data-score]").forEach(function (bar) {
-        const score = Number(bar.dataset.score);
+(function () {
+    const recipeKey = {{ recipe_key|tojson }};
+    const selectors = Array.from(document.querySelectorAll(".ingredient-alternative"));
+    const saveStatus = document.getElementById("substitution-status");
+    const scoreButton = document.getElementById("view-health-score");
+    const resultPanel = document.getElementById("health-score-result");
+    const scoreValue = document.getElementById("overall-score-value");
+    const alternativePanels = Array.from(document.querySelectorAll(".alternative-options"));
 
-        if (Number.isFinite(score)) {
-            const safeScore = Math.max(0, Math.min(100, score));
-            bar.style.width = safeScore + "%";
-            bar.setAttribute("aria-valuenow", String(safeScore));
+    async function postJSON(url, payload) {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            credentials: "same-origin"
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success === false) {
+            throw new Error(data.error || "Request failed. Please try again.");
         }
-    });
-});
-</script>
+        return data;
+    }
 
+    document.querySelectorAll(".alternative-choice").forEach(function (choice) {
+        choice.addEventListener("click", function () {
+            const select = document.getElementById(choice.dataset.selectId);
+            if (!select) return;
+            select.value = choice.dataset.value;
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+            document.querySelectorAll('.alternative-choice[data-select-id="' + choice.dataset.selectId + '"]').forEach(function (otherChoice) {
+                otherChoice.classList.toggle("active", otherChoice === choice);
+            });
+        });
+    });
+
+    selectors.forEach(function (select) {
+        select.addEventListener("change", async function () {
+            saveStatus.textContent = "Saving your choice…";
+            saveStatus.className = "small mt-2 text-muted";
+            resultPanel.hidden = true;
+            try {
+                await postJSON("/api/recipe/substitutions", {
+                    recipe_key: recipeKey,
+                    original_ingredient: select.dataset.original,
+                    selected_alternative: select.value
+                });
+                saveStatus.textContent = "Ingredient choice saved.";
+                saveStatus.className = "small mt-2 text-success";
+            } catch (error) {
+                saveStatus.textContent = error.message;
+                saveStatus.className = "small mt-2 text-danger";
+            }
+        });
+    });
+
+    if (scoreButton) {
+        scoreButton.addEventListener("click", async function () {
+            // Show alternative choices only after the user asks to view the health score.
+            alternativePanels.forEach(function (panel) { panel.hidden = false; });
+            scoreButton.disabled = true;
+            scoreButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Calculating…';
+            resultPanel.hidden = true;
+            try {
+                const ingredients = selectors.map(function (select) {
+                    return {
+                        original_ingredient: select.dataset.original,
+                        selected_ingredient: select.value || select.dataset.original
+                    };
+                });
+                const data = await postJSON("/api/recipe/health-score", {
+                    recipe_key: recipeKey,
+                    ingredients: ingredients
+                });
+                resultPanel.hidden = false;
+                if (data.overall_score === null || data.overall_score === undefined) {
+                    scoreValue.textContent = "Unavailable";
+                    scoreValue.textContent = "Unavailable";
+                } else {
+                    const score = Math.max(0, Math.min(100, Number(data.overall_score)));
+                    scoreValue.textContent = score.toFixed(1) + "/100";
+                    // Display only the consolidated recipe score, not ingredient-level scores or a list of scored ingredients.
+                }
+                resultPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            } catch (error) {
+                resultPanel.hidden = false;
+                scoreValue.textContent = "Unavailable";
+            } finally {
+                scoreButton.disabled = false;
+                scoreButton.innerHTML = '<i class="fa-solid fa-heart-pulse me-2"></i>View Health Score';
+            }
+        });
+    }
+})();
+</script>
 </body>
 </html>

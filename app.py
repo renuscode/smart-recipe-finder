@@ -18,6 +18,7 @@ import uuid
 import base64
 import urllib.parse
 import json
+import re
 
 from functools import wraps
 
@@ -48,6 +49,9 @@ from models_db import (
     save_recipe
 )
 
+from recipe_preferences import save_substitution, get_substitutions
+from ingredient_insights import ingredient_insights, normalize_name
+
 
 # ============================================================
 # ML / RECIPE / CHATBOT MODULES
@@ -68,6 +72,59 @@ app.secret_key = os.environ.get(
     "FLASK_SECRET_KEY",
     "smart-recipe-finder-2026-secret-key"
 )
+
+
+# ============================================================
+# OPTIONAL HINDI-TO-ENGLISH RECIPE TRANSLATION
+# ============================================================
+# Install with: python -m pip install deep-translator
+# Translation requires an internet connection. If the package/service is
+# unavailable, the application continues running without translation.
+try:
+    from deep_translator import GoogleTranslator
+except ImportError:
+    GoogleTranslator = None
+
+_TRANSLATION_CACHE = {}
+_HINDI_TEXT_PATTERN = re.compile(r"[\u0900-\u097F]")
+
+def translate_to_english(value):
+    """Translate Devanagari text to English while leaving English unchanged."""
+    if not isinstance(value, str):
+        return value
+    text_value = value.strip()
+    if not text_value or not _HINDI_TEXT_PATTERN.search(text_value):
+        return value
+    if text_value in _TRANSLATION_CACHE:
+        return _TRANSLATION_CACHE[text_value]
+    if GoogleTranslator is None:
+        app.logger.warning(
+            "Hindi recipe text found, but deep-translator is not installed. "
+            "Run: python -m pip install deep-translator"
+        )
+        return value
+    try:
+        translated = GoogleTranslator(source="auto", target="en").translate(text_value)
+        result = translated.strip() if isinstance(translated, str) and translated.strip() else value
+    except Exception:
+        app.logger.exception("Could not translate recipe text to English")
+        result = value
+    _TRANSLATION_CACHE[text_value] = result
+    return result
+
+def translate_recipe_fields_to_english(value, parent_key=""):
+    """Recursively translate recipe display values without changing source URLs."""
+    if isinstance(value, dict):
+        for key, item in list(value.items()):
+            if str(key).lower() in {"source_url", "image", "image_url", "user_image_url", "url"}:
+                continue
+            value[key] = translate_recipe_fields_to_english(item, str(key))
+        return value
+    if isinstance(value, list):
+        return [translate_recipe_fields_to_english(item, parent_key) for item in value]
+    if isinstance(value, str):
+        return translate_to_english(value)
+    return value
 
 
 # ============================================================
@@ -277,8 +334,8 @@ def login_page():
 
                 success, message, user_data = (
                     authenticate_user(
-                        username,
                         email,
+                        username,
                         password
                     )
                 )
@@ -1447,6 +1504,11 @@ def api_classify():
                 )
 
 
+    # Keep the most recently recognized/uploaded food image so the recipe page
+    # can display it even if the frontend does not pass user_image in its URL.
+    if user_image_url:
+        session["last_user_image_url"] = user_image_url
+
     # ========================================================
     # MARK RECIPE AS READY AFTER SUCCESSFUL CLASSIFICATION
     # ========================================================
@@ -1590,10 +1652,10 @@ def recipe_page():
     ).strip()
 
 
-    user_image = request.args.get(
-        "user_image",
-        ""
-    ).strip()
+    user_image = (
+        request.args.get("user_image", "").strip()
+        or session.get("last_user_image_url", "")
+    )
 
 
     top_predictions_raw = (
@@ -1653,6 +1715,72 @@ def recipe_page():
         )
     )
 
+    # Enrich each ingredient with alternatives from the verified substitution
+    # data source. This prevents an empty recipe-engine alternatives field from
+    # making the alternative choices disappear on the recipe page.
+    if isinstance(recipe_data, dict):
+        recipe_ingredients = recipe_data.get("ingredients") or []
+        normalized_ingredients = []
+        for ingredient_item in recipe_ingredients:
+            if isinstance(ingredient_item, str):
+                ingredient_item = {"name": ingredient_item, "amount": ""}
+            elif not isinstance(ingredient_item, dict):
+                continue
+
+            ingredient_name = str(
+                ingredient_item.get("name")
+                or ingredient_item.get("ingredient")
+                or ""
+            ).strip()
+            if not ingredient_name:
+                continue
+            ingredient_item["name"] = ingredient_name
+
+            existing_alternatives = ingredient_item.get("alternatives") or []
+            if not isinstance(existing_alternatives, list):
+                existing_alternatives = []
+
+            combined_alternatives = []
+            seen_alternatives = set()
+            for alternative in existing_alternatives:
+                if isinstance(alternative, str):
+                    alternative = {"ingredient": alternative}
+                if not isinstance(alternative, dict):
+                    continue
+                alternative_name = str(
+                    alternative.get("ingredient")
+                    or alternative.get("alternative_ingredient")
+                    or alternative.get("name")
+                    or ""
+                ).strip()
+                key = normalize_name(alternative_name)
+                if not key or key == normalize_name(ingredient_name) or key in seen_alternatives:
+                    continue
+                alternative["ingredient"] = alternative_name
+                seen_alternatives.add(key)
+                combined_alternatives.append(alternative)
+
+            try:
+                source_alternatives = ingredient_insights.get_alternatives(
+                    ingredient_name, limit=5
+                )
+            except Exception:
+                app.logger.exception(
+                    "Could not load alternatives for ingredient %s", ingredient_name
+                )
+                source_alternatives = []
+
+            for alternative in source_alternatives:
+                alternative_name = str(alternative.get("ingredient", "")).strip()
+                key = normalize_name(alternative_name)
+                if key and key != normalize_name(ingredient_name) and key not in seen_alternatives:
+                    seen_alternatives.add(key)
+                    combined_alternatives.append(alternative)
+
+            ingredient_item["alternatives"] = combined_alternatives
+            normalized_ingredients.append(ingredient_item)
+
+        recipe_data["ingredients"] = normalized_ingredients
 
     # ========================================================
     # SAVE RECIPE
@@ -1850,6 +1978,56 @@ def recipe_page():
 
 
     # ========================================================
+    # STABLE RECIPE KEY AND SAVED USER SUBSTITUTIONS
+    # ========================================================
+    actual_dish_for_key = dish
+    recipe_name_for_key = variety or dish
+
+    if isinstance(recipe_data, dict):
+        actual_dish_for_key = (
+            recipe_data.get("matched_dish")
+            or recipe_data.get("dish")
+            or dish
+        )
+        recipe_name_for_key = (
+            recipe_data.get("name")
+            or variety
+            or actual_dish_for_key
+        )
+
+    recipe_key = (
+        f"{normalize_name(actual_dish_for_key)}::"
+        f"{normalize_name(recipe_name_for_key)}"
+    )
+
+    try:
+        saved_substitutions = get_substitutions(
+            session["user_id"], recipe_key
+        )
+    except Exception:
+        app.logger.exception("Could not load saved ingredient substitutions")
+        saved_substitutions = {}
+
+    # Translate Hindi recipe fields into English for display. Preserve saved
+    # ingredient choices by moving their keys to the translated ingredient names.
+    if isinstance(recipe_data, dict):
+        for ingredient_item in recipe_data.get("ingredients") or []:
+            if not isinstance(ingredient_item, dict):
+                continue
+            original_name = str(
+                ingredient_item.get("name") or ingredient_item.get("ingredient") or ""
+            ).strip()
+            if not original_name:
+                continue
+            translated_name = translate_to_english(original_name)
+            old_key = normalize_name(original_name)
+            new_key = normalize_name(translated_name)
+            if old_key in saved_substitutions and new_key != old_key:
+                saved_value = saved_substitutions.pop(old_key)
+                saved_substitutions[new_key] = translate_to_english(str(saved_value))
+        translate_recipe_fields_to_english(recipe_data)
+
+    # ========================================================
     # DISPLAY RECIPE
     # ========================================================
 
@@ -1869,8 +2047,113 @@ def recipe_page():
             ),
 
         top_predictions=
-            top_predictions
+            top_predictions,
+
+        recipe_key=recipe_key,
+
+        saved_substitutions=saved_substitutions,
+
+        normalize_name=normalize_name
     )
+
+
+# ============================================================
+# SAVE USER INGREDIENT SUBSTITUTION
+# ============================================================
+
+@app.route("/api/recipe/substitutions", methods=["POST"])
+@login_required
+def api_save_recipe_substitution():
+    data = request.get_json(silent=True) or {}
+    recipe_key = str(data.get("recipe_key", "")).strip()
+    original = str(data.get("original_ingredient", "")).strip()
+    selected = str(data.get("selected_alternative", "")).strip()
+
+    if not recipe_key or not original:
+        return jsonify({"success": False, "error": "Recipe and ingredient are required."}), 400
+
+    # Ensure the recipe key belongs to the recipe currently being selected.
+    # The browser sends the stable key generated by the /recipe route.
+    try:
+        save_substitution(
+            user_id=session["user_id"],
+            recipe_key=recipe_key,
+            original_ingredient=original,
+            selected_alternative=selected,
+        )
+        return jsonify({"success": True, "message": "Ingredient choice saved."})
+    except Exception:
+        app.logger.exception("Could not save ingredient substitution")
+        return jsonify({"success": False, "error": "Could not save this choice to the database."}), 500
+
+
+# ============================================================
+# CONSOLIDATED RECIPE HEALTH SCORE
+# ============================================================
+
+@app.route("/api/recipe/health-score", methods=["POST"])
+@login_required
+def api_recipe_health_score():
+    data = request.get_json(silent=True) or {}
+    recipe_key = str(data.get("recipe_key", "")).strip()
+    ingredients = data.get("ingredients", [])
+
+    if not recipe_key or not isinstance(ingredients, list) or not ingredients:
+        return jsonify({"success": False, "error": "Recipe ingredients are required."}), 400
+
+    # Require the stable key format generated by the recipe page.
+    if "::" not in recipe_key:
+        return jsonify({"success": False, "error": "Invalid recipe."}), 400
+
+    scores = []
+    unavailable_count = 0
+
+    for item in ingredients:
+        if not isinstance(item, dict):
+            unavailable_count += 1
+            continue
+
+        ingredient_name = str(
+            item.get("selected_ingredient")
+            or item.get("original_ingredient")
+            or ""
+        ).strip()
+        if not ingredient_name:
+            unavailable_count += 1
+            continue
+
+        try:
+            result = ingredient_insights.get_health_score(ingredient_name)
+            if isinstance(result, dict) and result.get("available") and result.get("score") is not None:
+                score = float(result["score"])
+                if 0 <= score <= 100:
+                    scores.append(score)
+                else:
+                    unavailable_count += 1
+            else:
+                unavailable_count += 1
+        except Exception:
+            app.logger.exception("Ingredient score lookup failed for %s", ingredient_name)
+            unavailable_count += 1
+
+    if not scores:
+        return jsonify({
+            "success": True,
+            "overall_score": None,
+            "scored_count": 0,
+            "total_count": len(ingredients),
+            "unavailable_count": len(ingredients),
+            "label": "Provisional nutrition estimate",
+        })
+
+    return jsonify({
+        "success": True,
+        "overall_score": round(sum(scores) / len(scores), 1),
+        "scored_count": len(scores),
+        "total_count": len(ingredients),
+        "unavailable_count": max(0, len(ingredients) - len(scores)),
+        "label": "Provisional nutrition estimate",
+    })
 
 
 # ============================================================
