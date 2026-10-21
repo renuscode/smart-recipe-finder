@@ -57,7 +57,7 @@ from ingredient_insights import ingredient_insights, normalize_name
 # ML / RECIPE / CHATBOT MODULES
 # ============================================================
 
-from ml_engine import ml_engine
+from ai_client import ml_engine
 from recipe_engine import recipe_engine
 from chatbot_engine import cooking_assistant
 
@@ -2347,3 +2347,4 @@ if __name__ == "__main__":
 
         debug=False
     )
+
