@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Recipe Finder | Discover Recipes From Food Images</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<!-- =========================================================
+     NAVBAR
+========================================================= -->
+<nav class="navbar custom-navbar">
+    <div class="container">
+        <a class="navbar-brand logo-area" href="{{ url_for('home_page') }}">
+            <div class="logo-circle">
+                <i class="fa-solid fa-utensils"></i>
+            </div>
+            <span>Smart Recipe Finder</span>
+        </a>
+
+        <div class="navbar-links">
+            <a class="nav-link active" href="{{ url_for('home_page') }}">
+                <i class="fa-solid fa-house"></i>
+                Home
+            </a>
+
+            {% if user %}
+                <a class="nav-link" href="{{ url_for('upload_page') }}">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    Upload
+                </a>
+                <a class="nav-link" href="{{ url_for('recipe_page') }}">
+                    <i class="fa-solid fa-book-open"></i>
+                    Recipe
+                </a>
+                <a class="nav-link" href="{{ url_for('logout') }}">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    Logout ({{ user }})
+                </a>
+            {% else %}
+                <a class="nav-link" href="{{ url_for('login_page') }}">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    Login
+                </a>
+                <a class="main-action-btn" href="{{ url_for('signup_page') }}" style="padding: 9px 18px; font-size: 13px;">
+                    <i class="fa-solid fa-user-plus"></i>
+                    Sign Up
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+
+
+<!-- =========================================================
+     HERO SECTION
+========================================================= -->
+<main class="upload-page">
+    <div class="container">
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="row justify-content-center mb-4">
+                    <div class="col-md-8">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <section class="page-intro text-center">
+            <div class="small-badge">
+                <i class="fa-solid fa-bowl-food"></i>
+                SMART RECIPE FINDER
+            </div>
+
+            <h1 style="font-size: 46px; margin-top: 10px;">
+                Discover recipes from the food you love.
+            </h1>
+
+            <p style="font-size: 18px; max-width: 650px; margin: 15px auto 28px;">
+                Upload or capture a food image and let the system identify the dish and find a suitable recipe for you.
+            </p>
+
+            <div class="d-flex justify-content-center gap-3 flex-wrap">
+                {% if user %}
+                    <a href="{{ url_for('upload_page') }}" class="main-action-btn" style="font-size: 16px; padding: 16px 30px;">
+                        <i class="fa-solid fa-camera"></i>
+                        Get Started
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('signup_page') }}" class="main-action-btn" style="font-size: 16px; padding: 16px 30px;">
+                        <i class="fa-solid fa-sparkles"></i>
+                        Get Started
+                    </a>
+                    <a href="{{ url_for('login_page') }}" class="choose-image-btn" style="background: white; color: #287d43; border: 2px solid #287d43; font-size: 16px; padding: 14px 26px;">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        Login
+                    </a>
+                {% endif %}
+            </div>
+        </section>
+
+
+        <!-- =========================================================
+             HERO PREVIEW CARD (Matches ui design.png aesthetic)
+        ========================================================= -->
+        <section class="upload-card my-4" style="grid-template-columns: 1.1fr 0.9fr; align-items: center;">
+            <div class="upload-card-left">
+                <div class="upload-icon-large">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </div>
+
+                <h2>Visual Food Recognition & Retrieval</h2>
+
+                <p>
+                    Point your camera or upload an image of your favourite Indian dishes.
+                    Our AI model identifies the food, pinpoints its specific variety, and retrieves
+                    the verified recipe with ingredients and preparation steps instantly.
+                </p>
+
+                <div class="d-flex gap-3">
+                    {% if user %}
+                        <a href="{{ url_for('upload_page') }}" class="main-action-btn">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            Upload Image
+                        </a>
+                    {% else %}
+                        <a href="{{ url_for('login_page') }}" class="main-action-btn">
+                            <i class="fa-solid fa-arrow-right"></i>
+                            Explore Recipes
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="preview-card text-center" style="padding: 30px;">
+                <div style="width: 140px; height: 140px; margin: 0 auto 18px; border-radius: 50%; background: linear-gradient(135deg, #44a961, #217a41); display: flex; align-items: center; justify-content: center; color: white; font-size: 55px; box-shadow: 0 10px 25px rgba(45, 140, 70, 0.25);">
+                    <i class="fa-solid fa-utensils"></i>
+                </div>
+                <h4 style="color: #24472c; font-weight: 750;">From Photo to Plate</h4>
+                <p style="color: #7b8880; font-size: 13px; margin-top: 5px;">
+                    Works with Dosa, Biryani, Idli, Samosa, Dhokla, and 45+ other authentic Indian food classes.
+                </p>
+            </div>
+        </section>
+
+
+        <!-- =========================================================
+             FEATURES SECTION
+        ========================================================= -->
+        <section class="page-intro text-center mt-5 mb-4">
+            <h2 style="color: #24472c; font-size: 30px; font-weight: 800;">
+                Application Features
+            </h2>
+            <p style="font-size: 14px;">
+                Everything you need for seamless food discovery.
+            </p>
+        </section>
+
+        <section class="upload-features" style="grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));">
+            <!-- Feature 1 -->
+            <div class="feature-card">
+                <div class="feature-icon green-icon">
+                    <i class="fa-solid fa-camera"></i>
+                </div>
+                <div>
+                    <h5>Food Recognition</h5>
+                    <p>Identify food from an uploaded image.</p>
+                </div>
+            </div>
+
+            <!-- Feature 2 -->
+            <div class="feature-card">
+                <div class="feature-icon orange-icon">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </div>
+                <div>
+                    <h5>Recipe Finder</h5>
+                    <p>Find the corresponding recipe from the recipe dataset.</p>
+                </div>
+            </div>
+
+            <!-- Feature 3 -->
+            <div class="feature-card">
+                <div class="feature-icon blue-icon">
+                    <i class="fa-solid fa-list-check"></i>
+                </div>
+                <div>
+                    <h5>Recipe Details</h5>
+                    <p>View ingredients and preparation instructions.</p>
+                </div>
+            </div>
+
+            <!-- Feature 4 -->
+            <div class="feature-card">
+                <div class="feature-icon green-icon" style="background: #e7f6e9; color: #278143;">
+                    <i class="fa-solid fa-heart"></i>
+                </div>
+                <div>
+                    <h5>Easy to Use</h5>
+                    <p>Simple image-based recipe discovery.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
