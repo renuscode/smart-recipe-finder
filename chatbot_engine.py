@@ -1,9 +1,16 @@
+
 """
 chatbot_engine.py
-Cooking & Recipe Assistant Chatbot for Smart Recipe Finder.
-Supports local rule-based recipe context QA out-of-the-box,
-with graceful optional fallback for external LLM APIs (Gemini/OpenAI) if keys are provided in .env.
-Ensures zero application crashes even if external services are unavailable.
+Cooking & Recipe Assistant for Smart Recipe Finder.
+
+Features:
+- Answers questions using the currently displayed recipe.
+- Supports ingredients, preparation instructions, individual steps,
+  cooking time, cuisine, diet, and recipe descriptions.
+- Handles recipe data supplied as strings, dictionaries, or lists.
+- Uses Gemini optionally when an API key is configured.
+- Falls back to the local rule-based engine if Gemini is unavailable.
+- Returns consistent response dictionaries for the Flask API.
 """
 
 import os
@@ -12,263 +19,621 @@ import json
 import urllib.request
 import urllib.error
 
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(BASE_DIR, ".env")
 
-# Helper to read .env file without external dependencies
+
 def load_env_vars():
+    """Load .env values without requiring python-dotenv."""
     env_vars = {}
-    if os.path.exists(ENV_FILE):
-        try:
-            with open(ENV_FILE, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        k, v = line.split("=", 1)
-                        env_vars[k.strip()] = v.strip().strip("'\"")
-        except Exception:
-            pass
+
+    if not os.path.isfile(ENV_FILE):
+        return env_vars
+
+    try:
+        with open(ENV_FILE, "r", encoding="utf-8-sig") as file:
+            for line in file:
+                line = line.strip()
+
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+
+                key, value = line.split("=", 1)
+                env_vars[key.strip()] = value.strip().strip("'\"")
+
+    except (OSError, UnicodeError):
+        pass
+
     return env_vars
+
 
 ENV_CONFIG = load_env_vars()
 
 
 class CookingAssistant:
     def __init__(self):
-        self.gemini_key = os.environ.get("GEMINI_API_KEY") or ENV_CONFIG.get("GEMINI_API_KEY")
-        self.openai_key = os.environ.get("OPENAI_API_KEY") or ENV_CONFIG.get("OPENAI_API_KEY")
+        self.gemini_key = (
+            os.environ.get("GEMINI_API_KEY")
+            or ENV_CONFIG.get("GEMINI_API_KEY")
+        )
+
+        self.openai_key = (
+            os.environ.get("OPENAI_API_KEY")
+            or ENV_CONFIG.get("OPENAI_API_KEY")
+        )
+
+        # You can override this in .env if necessary.
+        self.gemini_model = (
+            os.environ.get("GEMINI_MODEL")
+            or ENV_CONFIG.get("GEMINI_MODEL")
+            or "gemini-2.5-flash"
+        )
+
+    # ---------------------------------------------------------
+    # DATA NORMALIZATION
+    # ---------------------------------------------------------
+
+    @staticmethod
+    def _to_text(value):
+        """Convert a simple value to clean text safely."""
+        if value is None:
+            return ""
+
+        if isinstance(value, str):
+            return value.strip()
+
+        if isinstance(value, (int, float)):
+            return str(value)
+
+        return ""
+
+    @staticmethod
+    def _to_list(value):
+        """Normalize recipe data into a list without splitting strings."""
+        if value is None:
+            return []
+
+        if isinstance(value, list):
+            return value
+
+        if isinstance(value, tuple):
+            return list(value)
+
+        if isinstance(value, dict):
+            return [value]
+
+        if isinstance(value, str):
+            value = value.strip()
+
+            if not value:
+                return []
+
+            # Handle JSON-encoded lists if a caller supplies them.
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            # Preserve a single plain-text instruction or ingredient.
+            return [value]
+
+        return []
 
     def format_ingredients_text(self, ingredients):
-        """Formats ingredients list for natural language response."""
-        if not ingredients:
+        """Format recipe ingredients for display."""
+        items = self._to_list(ingredients)
+
+        if not items:
             return "No ingredient information is available for this recipe."
-        
+
         lines = []
-        for item in ingredients:
+
+        for item in items:
             if isinstance(item, dict):
-                amount = item.get("amount", "").strip()
-                name = item.get("name", "").strip()
-                if amount and name:
-                    lines.append(f"• {name} ({amount})")
+                name = self._to_text(
+                    item.get("name")
+                    or item.get("ingredient")
+                    or item.get("original_ingredient")
+                )
+
+                amount = self._to_text(
+                    item.get("amount")
+                    or item.get("quantity")
+                    or item.get("measure")
+                )
+
+                if name and amount:
+                    lines.append(f"- {name} ({amount})")
                 elif name:
-                    lines.append(f"• {name}")
+                    lines.append(f"- {name}")
+                elif amount:
+                    lines.append(f"- {amount}")
+
             elif isinstance(item, str) and item.strip():
-                lines.append(f"• {item.strip()}")
+                lines.append(f"- {item.strip()}")
 
         if not lines:
             return "Ingredient details are not listed for this dish."
+
         return "\n".join(lines)
 
     def format_instructions_text(self, instructions):
-        """Formats instructions list for natural language response."""
-        if not instructions:
-            return "No step-by-step preparation steps are available for this recipe."
+        """Format recipe instructions into numbered steps."""
+        steps = self._to_list(instructions)
+
+        if not steps:
+            return "No step-by-step preparation instructions are available."
 
         lines = []
-        for idx, step in enumerate(instructions, start=1):
-            s_clean = str(step).strip()
-            if s_clean:
-                lines.append(f"{idx:02d}. {s_clean}")
+
+        for step in steps:
+            if isinstance(step, dict):
+                step_text = self._to_text(
+                    step.get("instruction")
+                    or step.get("step")
+                    or step.get("description")
+                    or step.get("text")
+                )
+            else:
+                step_text = self._to_text(step)
+
+            if step_text:
+                lines.append(step_text)
 
         if not lines:
-            return "Step-by-step preparation steps are not available in the dataset."
-        return "\n\n".join(lines)
+            return "Step-by-step preparation instructions are not available."
+
+        return "\n\n".join(
+            f"{index:02d}. {step}"
+            for index, step in enumerate(lines, start=1)
+        )
+
+    @staticmethod
+    def _contains_any(question, phrases):
+        """Match complete words or phrases rather than arbitrary substrings."""
+        question = question.lower()
+
+        return any(
+            re.search(
+                r"(?<!\w)" + re.escape(phrase.lower()) + r"(?!\w)",
+                question,
+            )
+            for phrase in phrases
+        )
+
+    # ---------------------------------------------------------
+    # LOCAL RULE-BASED CHATBOT
+    # ---------------------------------------------------------
 
     def answer_with_local_engine(self, question, context=None):
         """
-        Answers cooking questions using recipe context with intelligent rule-based matching.
-        Does NOT fabricate recipes, health scores, or alternative ingredients.
+        Answer recipe questions from the supplied recipe context.
+        This method does not invent missing recipe information.
         """
-        q = (question or "").strip().lower()
+        q = self._to_text(question).lower()
 
-        # Check if recipe context is present
-        has_recipe = bool(context and isinstance(context, dict) and context.get("name"))
-        recipe_name = context.get("name", "the selected dish") if has_recipe else ""
-        cuisine = context.get("cuisine", "Indian") if has_recipe else ""
-        course = context.get("course", "Main Course") if has_recipe else ""
-        diet = context.get("diet", "Vegetarian") if has_recipe else ""
-        prep_time = context.get("prep_time", "") if has_recipe else ""
-        description = context.get("description", "") if has_recipe else ""
-        ingredients = context.get("ingredients", []) if has_recipe else []
-        instructions = context.get("instructions", []) if has_recipe else []
+        if isinstance(context, str):
+            try:
+                context = json.loads(context)
+            except (json.JSONDecodeError, TypeError):
+                context = {}
 
-        # 1. Greetings & General Help
-        if any(re.search(r"\b" + re.escape(w) + r"\b", q) for w in ["hello", "hi", "hey", "who are you", "what can you do", "help"]):
+        if not isinstance(context, dict):
+            context = {}
+
+        recipe_name = self._to_text(
+            context.get("name")
+            or context.get("dish")
+            or context.get("recipe_name")
+        )
+
+        has_recipe = bool(recipe_name)
+
+        cuisine = self._to_text(context.get("cuisine")) or "Not specified"
+        course = self._to_text(context.get("course")) or "Not specified"
+        diet = self._to_text(context.get("diet")) or "Not specified"
+        prep_time = self._to_text(
+            context.get("prep_time") or context.get("cooking_time")
+        )
+        description = self._to_text(context.get("description"))
+
+        ingredients = self._to_list(context.get("ingredients"))
+        instructions = self._to_list(
+            context.get("instructions")
+            or context.get("steps")
+            or context.get("method")
+        )
+
+        # Normalize instruction dictionaries into readable text.
+        clean_steps = []
+
+        for item in instructions:
+            if isinstance(item, dict):
+                step_text = self._to_text(
+                    item.get("instruction")
+                    or item.get("step")
+                    or item.get("description")
+                    or item.get("text")
+                )
+            else:
+                step_text = self._to_text(item)
+
+            if step_text:
+                clean_steps.append(step_text)
+
+        # 1. Greetings and help
+        if self._contains_any(
+            q,
+            [
+                "hello", "hi", "hey", "good morning",
+                "good afternoon", "good evening",
+                "who are you", "what can you do", "help",
+            ],
+        ):
             if has_recipe:
                 return (
-                    f"Hello! I am your Cooking Assistant. You are currently viewing the recipe for **{recipe_name}**.\n\n"
+                    f"Hello! I am your Cooking Assistant. "
+                    f"You are viewing **{recipe_name}**.\n\n"
                     "You can ask me about:\n"
-                    "• Ingredients required\n"
-                    "• Preparation steps\n"
-                    "• Cooking & preparation time\n"
-                    "• Cuisine and dish details"
-                )
-            else:
-                return (
-                    "Hello! I am your Smart Recipe Cooking Assistant.\n\n"
-                    "I can help answer your questions about recipe ingredients, preparation methods, cooking times, "
-                    "and cuisines for any dish identified by our system."
+                    "- Ingredients and quantities\n"
+                    "- How to prepare or cook this dish\n"
+                    "- A specific step, such as 'Explain step 2'\n"
+                    "- Preparation time\n"
+                    "- Cuisine, diet, and dish details"
                 )
 
-        # 2. Preparation time / Duration
-        if any(w in q for w in ["how long", "prep time", "cooking time", "how much time", "duration", "time"]):
-            if has_recipe and prep_time:
-                return f"**{recipe_name}** takes approximately **{prep_time}** to prepare and cook."
-            elif has_recipe:
-                return f"The exact preparation time for **{recipe_name}** is not specified in our dataset, but it typically takes around 30 to 45 minutes."
-            else:
-                return "Please select or search for a dish first so I can tell you its exact preparation time."
+            return (
+                "Hello! I am your Smart Recipe Cooking Assistant.\n\n"
+                "Open a recipe first, then ask me about its ingredients, "
+                "preparation steps, cooking time, or cuisine."
+            )
+
+        # 2. Specific step questions should be checked before general steps.
+        step_match = re.search(r"\bstep\s*(\d+)\b", q)
+
+        if step_match:
+            if not has_recipe:
+                return "Please open a recipe first so I can explain its steps."
+
+            if not clean_steps:
+                return (
+                    f"Step-by-step instructions for **{recipe_name}** "
+                    "are not available in the recipe data."
+                )
+
+            step_num = int(step_match.group(1))
+
+            if 1 <= step_num <= len(clean_steps):
+                return (
+                    f"**Step {step_num} for {recipe_name}:**\n\n"
+                    f"{clean_steps[step_num - 1]}"
+                )
+
+            return (
+                f"This recipe has {len(clean_steps)} available steps. "
+                f"Please ask for a step between 1 and {len(clean_steps)}."
+            )
 
         # 3. Ingredients
-        if any(w in q for w in ["ingredient", "what do i need", "what is needed", "items", "grocery"]):
-            if has_recipe and ingredients:
-                ing_text = self.format_ingredients_text(ingredients)
-                return f"Here are the ingredients needed for **{recipe_name}**:\n\n{ing_text}"
-            elif has_recipe:
-                return f"Ingredient measurements are not available in our recipe collection for **{recipe_name}**."
-            else:
-                return "Please view a recipe or scan a dish to see the full list of ingredients."
+        if self._contains_any(
+            q,
+            [
+                "ingredient", "ingredients", "what do i need",
+                "what is needed", "what are the items",
+                "grocery", "shopping list", "quantity", "quantities",
+            ],
+        ):
+            if not has_recipe:
+                return "Please open a recipe first to view its ingredients."
 
-        # 4. Specific step explanation (e.g. "explain step 3", "step 2")
-        step_match = re.search(r"step\s*(\d+)", q)
-        if step_match and has_recipe and instructions:
-            step_num = int(step_match.group(1))
-            if 1 <= step_num <= len(instructions):
-                return f"**Step {step_num:02d} for {recipe_name}:**\n\n{instructions[step_num - 1]}"
-            else:
-                return f"This recipe has {len(instructions)} steps. Please ask for a step between 1 and {len(instructions)}."
+            ingredient_text = self.format_ingredients_text(ingredients)
 
-        # 5. Instructions / Preparation Steps
-        if any(w in q for w in ["how to make", "how do i prepare", "how to cook", "preparation", "steps", "instructions", "method", "recipe"]):
-            if has_recipe and instructions:
-                inst_text = self.format_instructions_text(instructions[:6]) # Show first few steps
-                total = len(instructions)
-                extra = f"\n\n*(Displaying first 6 of {total} steps. Check the recipe page for full details.)*" if total > 6 else ""
-                return f"Here is the preparation method for **{recipe_name}**:\n\n{inst_text}{extra}"
-            elif has_recipe:
-                return f"Preparation instructions are not available in our recipe collection for **{recipe_name}**."
-            else:
-                return "Please scan or select a dish first to view its step-by-step preparation steps."
-
-        # 6. Cuisine, Course, or Diet
-        if any(w in q for w in ["cuisine", "type of food", "course", "diet", "vegetarian", "category"]):
-            if has_recipe:
-                return (
-                    f"**{recipe_name}** is a traditional **{cuisine}** dish.\n\n"
-                    f"• **Course:** {course}\n"
-                    f"• **Diet:** {diet}\n"
-                    f"• **Prep Time:** {prep_time or 'Standard'}"
-                )
-            else:
-                return "This application specializes in authentic Indian dishes including South Indian, North Indian, and regional favorites."
-
-        # 7. Dish overview / What is this dish
-        if any(w in q for w in ["what is this", "tell me about", "about this dish", "describe"]):
-            if has_recipe and description:
-                return f"**About {recipe_name}:**\n\n{description}"
-            elif has_recipe:
-                return f"**{recipe_name}** is an authentic {cuisine} recipe ({course}, {diet}). Full details are listed on this page."
-            else:
-                return "Upload or capture a food photo on the Upload page to identify any dish and read its description."
-
-        # 8. Dishes to try / Recommendations
-        if any(w in q for w in ["what dishes", "recommend", "what can i try", "suggestions", "popular dishes"]):
             return (
-                "Here are popular dishes you can explore in our collection:\n\n"
-                "• **Dosa** (Plain Dosa, Masala Dosa, Rava Dosa)\n"
-                "• **Biryani** (Chicken Biryani, Vegetable Biryani)\n"
-                "• **Idli** (Plain Idli, Thatte Idli, Rava Idli)\n"
-                "• **Samosa** (Aloo Samosa, Vegetable Samosa)\n"
-                "• **Dhokla** (Khaman Dhokla, Khatta Dhokla)\n"
-                "• **Paneer** (Kadai Paneer, Palak Paneer)\n\n"
-                "Try scanning or searching any of these!"
+                f"**Ingredients for {recipe_name}:**\n\n"
+                f"{ingredient_text}"
             )
 
-        # 9. Fallback response for unhandled questions
+        # 4. Preparation time
+        if self._contains_any(
+            q,
+            [
+                "how long", "prep time", "preparation time",
+                "cooking time", "how much time", "duration",
+                "time required", "time taken",
+            ],
+        ):
+            if not has_recipe:
+                return "Please open a recipe first to check its preparation time."
+
+            if prep_time:
+                return (
+                    f"The recorded preparation time for **{recipe_name}** "
+                    f"is **{prep_time}**."
+                )
+
+            return (
+                f"The preparation time for **{recipe_name}** "
+                "is not specified in the available recipe data."
+            )
+
+        # 5. Preparation instructions / how to cook
+        if self._contains_any(
+            q,
+            [
+                "how to make", "how do i make",
+                "how do i prepare", "how can i prepare",
+                "how to prepare", "how do i cook",
+                "how can i cook", "how to cook",
+                "cook this", "make this", "prepare this",
+                "preparation", "preparation method",
+                "cooking method", "instructions",
+                "show steps", "list steps", "recipe method",
+                "recipe steps", "method",
+            ],
+        ) or q.strip() in {
+            "steps", "recipe", "how to prepare it", "how to cook it"
+        }:
+            if not has_recipe:
+                return (
+                    "Please open or select a recipe first so I can provide "
+                    "the preparation instructions for that dish."
+                )
+
+            if not clean_steps:
+                return (
+                    f"Preparation instructions for **{recipe_name}** "
+                    "are not available in the recipe data."
+                )
+
+            displayed_steps = clean_steps[:10]
+
+            formatted = "\n\n".join(
+                f"{index:02d}. {step}"
+                for index, step in enumerate(displayed_steps, start=1)
+            )
+
+            extra = ""
+
+            if len(clean_steps) > len(displayed_steps):
+                extra = (
+                    f"\n\nShowing the first {len(displayed_steps)} steps "
+                    f"out of {len(clean_steps)}. See the recipe page "
+                    "for the remaining steps."
+                )
+
+            return (
+                f"**How to prepare {recipe_name}:**\n\n"
+                f"{formatted}{extra}"
+            )
+
+        # 6. Cuisine, course, and diet
+        if self._contains_any(
+            q,
+            [
+                "cuisine", "type of food", "course",
+                "diet", "vegetarian", "non vegetarian",
+                "non-vegetarian", "food category",
+            ],
+        ):
+            if not has_recipe:
+                return "Please open a recipe to see its cuisine and category."
+
+            return (
+                f"**Details for {recipe_name}**\n\n"
+                f"- Cuisine: {cuisine}\n"
+                f"- Course: {course}\n"
+                f"- Diet: {diet}\n"
+                f"- Preparation time: {prep_time or 'Not specified'}"
+            )
+
+        # 7. Recipe description
+        if self._contains_any(
+            q,
+            [
+                "what is this", "tell me about",
+                "about this dish", "describe this",
+                "description", "what is",
+            ],
+        ):
+            if not has_recipe:
+                return (
+                    "Upload a food image or select a dish, then open its "
+                    "recipe to see its description."
+                )
+
+            if description:
+                return f"**About {recipe_name}:**\n\n{description}"
+
+            return (
+                f"A description for **{recipe_name}** is not available "
+                "in the recipe data."
+            )
+
+        # 8. Recommendations from the known application collection
+        if self._contains_any(
+            q,
+            [
+                "recommend", "suggest a dish", "suggestions",
+                "what can i try", "popular dishes",
+                "what dishes", "other dishes",
+            ],
+        ):
+            return (
+                "You can explore these dishes in Smart Recipe Finder:\n\n"
+                "- Dosa\n"
+                "- Biryani\n"
+                "- Idli\n"
+                "- Samosa\n"
+                "- Dhokla\n"
+                "- Paneer dishes\n\n"
+                "Search for a dish or upload a food image to view its recipe."
+            )
+
+        # 9. Fallback
         if has_recipe:
             return (
-                f"I'm here to assist with **{recipe_name}**! You can ask me about:\n"
-                "• The ingredients needed\n"
-                "• The cooking steps or step explanation\n"
-                "• Preparation time and cuisine details"
-            )
-        else:
-            return (
-                "Recipe information for this query is not available in our collection. "
-                "Try searching for an authentic dish like Dosa, Biryani, Idli, or Samosa."
+                f"I'm here to help with **{recipe_name}**. "
+                "Try asking one of these questions:\n\n"
+                "- What ingredients do I need?\n"
+                "- How do I cook this dish?\n"
+                "- Explain step 2.\n"
+                "- How long does it take?\n"
+                "- What cuisine is it?"
             )
 
-    def answer(self, question, context=None):
-        """
-        Top-level answer method.
-        Attempts LLM API call if key is configured, with safe, instantaneous fallback to local engine.
-        Guarantees that the chatbot NEVER breaks the website.
-        """
-        if not question or not str(question).strip():
-            return {
-                "success": True,
-                "reply": "Please type a question about the recipe.",
-                "source": "local"
-            }
+        return (
+            "I couldn't identify the recipe information for that question. "
+            "Please open a recipe first, then ask me about its ingredients, "
+            "preparation instructions, cooking time, or cuisine."
+        )
 
-        # Attempt external API if configured
-        # (External API call is wrapped safely with short timeout)
-        if self.gemini_key:
-            try:
-                reply = self._call_gemini_api(question, context)
-                if reply:
-                    return {"success": True, "reply": reply, "source": "gemini"}
-            except Exception:
-                pass  # Fall back to local engine silently
-
-        # Local Engine Answer
-        local_reply = self.answer_with_local_engine(question, context)
-        return {
-            "success": True,
-            "reply": local_reply,
-            "source": "local"
-        }
+    # ---------------------------------------------------------
+    # OPTIONAL GEMINI API
+    # ---------------------------------------------------------
 
     def _call_gemini_api(self, question, context):
-        """Calls Gemini REST endpoint safely using urllib."""
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_key}"
-        
-        ctx_text = ""
-        if context and isinstance(context, dict):
-            ctx_text = (
-                f"Recipe Name: {context.get('name', '')}\n"
-                f"Cuisine: {context.get('cuisine', '')}\n"
-                f"Course: {context.get('course', '')}\n"
-                f"Diet: {context.get('diet', '')}\n"
-                f"Prep Time: {context.get('prep_time', '')}\n"
-                f"Description: {context.get('description', '')}\n"
-                f"Ingredients: {json.dumps(context.get('ingredients', []))}\n"
-                f"Instructions: {json.dumps(context.get('instructions', []))}\n"
-            )
+        """Call Gemini using the configured model and API key."""
+        if not self.gemini_key:
+            return None
+
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self.gemini_model}:generateContent"
+            f"?key={self.gemini_key}"
+        )
+
+        if not isinstance(context, dict):
+            context = {}
+
+        # Limit context size so a large recipe cannot create an excessive prompt.
+        ctx_text = (
+            f"Recipe name: {self._to_text(context.get('name') or context.get('dish'))}\n"
+            f"Cuisine: {self._to_text(context.get('cuisine'))}\n"
+            f"Course: {self._to_text(context.get('course'))}\n"
+            f"Diet: {self._to_text(context.get('diet'))}\n"
+            f"Preparation time: {self._to_text(context.get('prep_time'))}\n"
+            f"Description: {self._to_text(context.get('description'))}\n"
+            f"Ingredients: {json.dumps(context.get('ingredients', []), ensure_ascii=False, default=str)[:8000]}\n"
+            f"Instructions: {json.dumps(context.get('instructions', []), ensure_ascii=False, default=str)[:12000]}\n"
+        )
 
         prompt = (
-            "You are a friendly Cooking Assistant for the Smart Recipe Finder application. "
-            "Answer the user's cooking question concisely using ONLY the provided recipe context. "
-            "Do NOT provide health scores, calories, medical advice, or alternative ingredients substitutions. "
-            "If recipe info is not available, state that clearly.\n\n"
-            f"Context:\n{ctx_text}\n\n"
-            f"User Question: {question}"
+            "You are the cooking assistant for Smart Recipe Finder.\n"
+            "Answer the user's question using the supplied recipe information.\n"
+            "Do not claim that missing information is present in the recipe.\n"
+            "Do not invent ingredient quantities or recipe instructions.\n"
+            "Do not provide medical advice, health scores, or nutrition claims.\n"
+            "Do not invent ingredient substitutions; those are handled by a "
+            "separate feature in this application.\n"
+            "If the question is unrelated to cooking, politely explain your scope.\n"
+            "Use a friendly, concise answer.\n\n"
+            f"Recipe context:\n{ctx_text}\n"
+            f"User question: {question}"
         )
 
         payload = {
-            "contents": [{"parts": [{"text": prompt}]}]
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt}
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 700,
+            },
         }
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
+
+        request = urllib.request.Request(
             url,
-            data=data,
+            data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
-            method="POST"
+            method="POST",
         )
-        with urllib.request.urlopen(req, timeout=4) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            return res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+        with urllib.request.urlopen(request, timeout=8) as response:
+            response_data = json.loads(
+                response.read().decode("utf-8")
+            )
+
+        candidates = response_data.get("candidates", [])
+
+        if not candidates:
+            return None
+
+        parts = (
+            candidates[0]
+            .get("content", {})
+            .get("parts", [])
+        )
+
+        answer_parts = [
+            part.get("text", "").strip()
+            for part in parts
+            if isinstance(part, dict) and part.get("text")
+        ]
+
+        answer = "\n".join(answer_parts).strip()
+
+        return answer or None
+
+    # ---------------------------------------------------------
+    # PUBLIC ENTRY POINT USED BY FLASK
+    # ---------------------------------------------------------
+
+    def answer(self, question, context=None):
+        """
+        Return a consistent dictionary consumed by the Flask /api/chat route.
+        """
+        question = self._to_text(question)
+
+        if not question:
+            return {
+                "success": True,
+                "reply": "Please type a question about the recipe.",
+                "source": "local",
+            }
+
+        # Prefer Gemini when configured. If it fails, use the local engine.
+        if self.gemini_key:
+            try:
+                reply = self._call_gemini_api(question, context)
+
+                if reply:
+                    return {
+                        "success": True,
+                        "reply": reply,
+                        "source": "gemini",
+                    }
+
+            except (
+                urllib.error.URLError,
+                urllib.error.HTTPError,
+                TimeoutError,
+                OSError,
+                ValueError,
+                KeyError,
+                TypeError,
+            ):
+                # A failed API call must not stop the website's chatbot.
+                pass
+
+            except Exception:
+                # Keep the chatbot available if an unexpected API error occurs.
+                pass
+
+        reply = self.answer_with_local_engine(question, context)
+
+        return {
+            "success": True,
+            "reply": reply,
+            "source": "local",
+        }
 
 
-# Singleton assistant instance
+# Shared instance imported by app.py
 cooking_assistant = CookingAssistant()
