@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,11 +7,8 @@
 
     <title>{{ recipe.name or recipe.dish or "Recipe Details" }} - Smart Recipe Finder</title>
 
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
           rel="stylesheet">
-
-    <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
           rel="stylesheet">
 
@@ -21,18 +19,14 @@
             font-family: Arial, sans-serif;
         }
 
-        .navbar {
-            background: #176b4d;
-        }
+        .navbar { background: #176b4d; }
 
         .navbar-brand {
             color: white;
             font-weight: bold;
         }
 
-        .navbar-brand:hover {
-            color: #e7f5ed;
-        }
+        .navbar-brand:hover { color: #e7f5ed; }
 
         .page-header {
             background: linear-gradient(135deg, #176b4d, #38a879);
@@ -74,13 +68,6 @@
             font-size: 0.92rem;
         }
 
-        .nutrition-panel {
-            background: #f2faf5;
-            border-radius: 9px;
-            padding: 12px;
-            margin-top: 12px;
-        }
-
         .substitution-panel {
             background: #f8f9fc;
             border: 1px solid #e5e8f0;
@@ -99,9 +86,7 @@
             background: rgba(255,255,255,.12);
         }
 
-        .alternative-options[hidden] {
-            display: none !important;
-        }
+        .alternative-options[hidden] { display: none !important; }
 
         .health-result {
             border: 1px solid #d8e9df;
@@ -120,16 +105,6 @@
         .substitution-panel h6 {
             color: #176b4d;
             font-weight: bold;
-        }
-
-        .badge-soft {
-            display: inline-block;
-            background: #e3f3e9;
-            color: #176b4d;
-            border-radius: 20px;
-            padding: 5px 10px;
-            font-size: 0.8rem;
-            margin: 3px 0;
         }
 
         .instruction-item {
@@ -151,14 +126,6 @@
             font-weight: bold;
         }
 
-        .notice {
-            background: #fff8e6;
-            border-left: 4px solid #e0a52b;
-            padding: 12px 14px;
-            border-radius: 5px;
-            font-size: 0.9rem;
-        }
-
         .back-button {
             background: #176b4d;
             border-color: #176b4d;
@@ -176,21 +143,99 @@
             text-align: center;
         }
 
-        @media (max-width: 576px) {
-            .content-card {
-                padding: 17px;
-            }
+        /* Cooking assistant */
+        .chat-panel {
+            border: 1px solid #e1ebe5;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #fff;
+        }
 
-            .page-header {
-                padding: 25px 16px;
-            }
+        .chat-panel-header {
+            background: #176b4d;
+            color: white;
+            padding: 15px 18px;
+        }
+
+        .chat-messages {
+            height: 320px;
+            overflow-y: auto;
+            padding: 16px;
+            background: #f5f8f6;
+        }
+
+        .chat-message {
+            display: flex;
+            margin-bottom: 14px;
+        }
+
+        .chat-message.user { justify-content: flex-end; }
+
+        .chat-bubble {
+            max-width: 88%;
+            padding: 11px 14px;
+            border-radius: 12px;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .chat-message.assistant .chat-bubble {
+            background: white;
+            border: 1px solid #e1e9e4;
+            color: #263238;
+            border-top-left-radius: 3px;
+        }
+
+        .chat-message.user .chat-bubble {
+            background: #176b4d;
+            color: white;
+            border-top-right-radius: 3px;
+        }
+
+        .chat-input-area {
+            padding: 14px;
+            border-top: 1px solid #e1e9e4;
+            background: white;
+        }
+
+        .chat-status {
+            min-height: 20px;
+            font-size: .85rem;
+            color: #66756d;
+        }
+
+        .chat-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .chat-suggestion {
+            border: 1px solid #cbded2;
+            background: #f2faf5;
+            color: #176b4d;
+            border-radius: 18px;
+            padding: 6px 11px;
+            font-size: .85rem;
+        }
+
+        .chat-suggestion:hover {
+            background: #e1f2e8;
+        }
+
+        @media (max-width: 576px) {
+            .content-card { padding: 17px; }
+            .page-header { padding: 25px 16px; }
+            .chat-messages { height: 280px; }
+            .chat-bubble { max-width: 94%; }
         }
     </style>
 </head>
 
 <body>
 
-<!-- Navigation -->
 <nav class="navbar navbar-expand-lg">
     <div class="container">
         <a class="navbar-brand text-decoration-none" href="/">
@@ -199,8 +244,7 @@
         </a>
 
         <a href="/" class="btn btn-outline-light btn-sm">
-            <i class="fa-solid fa-house me-1"></i>
-            Home
+            <i class="fa-solid fa-house me-1"></i> Home
         </a>
     </div>
 </nav>
@@ -233,12 +277,16 @@
                     </p>
                 {% endif %}
             </div>
+
             {% if user_image %}
                 <div class="col-12 col-md-5">
-                    <img src="{{ user_image|e }}" alt="Recognized food image: {{ recipe.name or recipe.dish or 'food' }}"
+                    <img src="{{ user_image|e }}"
+                         alt="Recognized food image"
                          class="img-fluid recognized-food-image"
                          onerror="this.closest('.col-12').style.display='none';">
-                    <div class="small mt-2 text-white-50">Your recognized food image</div>
+                    <div class="small mt-2 text-white-50">
+                        Your recognized food image
+                    </div>
                 </div>
             {% endif %}
         </div>
@@ -252,15 +300,12 @@
         </h4>
 
         <div class="row g-3">
-
             {% if recipe.preparation_time %}
                 <div class="col-6 col-md-4">
                     <div class="border rounded p-3 h-100">
                         <i class="fa-regular fa-clock text-success me-2"></i>
                         <strong>Preparation</strong>
-                        <div class="mt-1">
-                            {{ recipe.preparation_time }}
-                        </div>
+                        <div class="mt-1">{{ recipe.preparation_time }}</div>
                     </div>
                 </div>
             {% endif %}
@@ -270,9 +315,7 @@
                     <div class="border rounded p-3 h-100">
                         <i class="fa-solid fa-fire-burner text-success me-2"></i>
                         <strong>Cooking</strong>
-                        <div class="mt-1">
-                            {{ recipe.cooking_time }}
-                        </div>
+                        <div class="mt-1">{{ recipe.cooking_time }}</div>
                     </div>
                 </div>
             {% endif %}
@@ -282,13 +325,10 @@
                     <div class="border rounded p-3 h-100">
                         <i class="fa-solid fa-users text-success me-2"></i>
                         <strong>Servings</strong>
-                        <div class="mt-1">
-                            {{ recipe.servings }}
-                        </div>
+                        <div class="mt-1">{{ recipe.servings }}</div>
                     </div>
                 </div>
             {% endif %}
-
         </div>
     </section>
 
@@ -302,49 +342,71 @@
         {% if recipe.ingredients %}
             {% for item in recipe.ingredients %}
                 {% set ingredient_index = loop.index %}
-                <div class="ingredient-item" data-original-ingredient="{{ item.name|e }}">
+                <div class="ingredient-item"
+                     data-original-ingredient="{{ item.name|e }}">
+
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                         <div class="flex-grow-1">
                             <div class="ingredient-name">
                                 <i class="fa-solid fa-leaf text-success me-2"></i>
                                 {{ item.name }}
                             </div>
+
                             {% if item.amount %}
-                                <div class="ingredient-amount mt-1">Amount: {{ item.amount }}</div>
+                                <div class="ingredient-amount mt-1">
+                                    Amount: {{ item.amount }}
+                                </div>
                             {% endif %}
                         </div>
                     </div>
 
                     <div class="substitution-panel mt-3 alternative-options" hidden>
                         <div class="form-label fw-semibold mb-2">
-                            <i class="fa-solid fa-arrows-rotate me-2"></i>Alternative ingredients
+                            <i class="fa-solid fa-arrows-rotate me-2"></i>
+                            Alternative ingredients
                         </div>
-                        <!-- Hidden select keeps the selected value connected to the save and health-score logic. -->
+
                         <select class="form-select ingredient-alternative d-none"
                                 id="alternative-{{ loop.index }}"
-                                data-original="{{ item.name|e }}" aria-hidden="true" tabindex="-1">
-                            <option value="" {% if not saved_substitutions.get(normalize_name(item.name), '') %}selected{% endif %}>{{ item.name }}</option>
+                                data-original="{{ item.name|e }}"
+                                aria-hidden="true" tabindex="-1">
+                            <option value=""
+                                {% if not saved_substitutions.get(normalize_name(item.name), '') %}
+                                    selected
+                                {% endif %}>
+                                {{ item.name }}
+                            </option>
+
                             {% if item.alternatives %}
                                 {% for alt in item.alternatives %}
                                     <option value="{{ alt.ingredient|e }}"
-                                        {% if saved_substitutions.get(normalize_name(item.name), '') == alt.ingredient %}selected{% endif %}>{{ alt.ingredient }}</option>
+                                        {% if saved_substitutions.get(normalize_name(item.name), '') == alt.ingredient %}
+                                            selected
+                                        {% endif %}>
+                                        {{ alt.ingredient }}
+                                    </option>
                                 {% endfor %}
                             {% endif %}
                         </select>
+
                         <ul class="list-group alternative-list">
                             <li class="list-group-item p-0">
                                 <button type="button"
                                         class="list-group-item list-group-item-action alternative-choice {% if not saved_substitutions.get(normalize_name(item.name), '') %}active{% endif %}"
-                                        data-select-id="alternative-{{ loop.index }}" data-value="">
-                                    <i class="fa-solid fa-check me-2"></i>Keep original: {{ item.name }}
+                                        data-select-id="alternative-{{ loop.index }}"
+                                        data-value="">
+                                    <i class="fa-solid fa-check me-2"></i>
+                                    Keep original: {{ item.name }}
                                 </button>
                             </li>
+
                             {% if item.alternatives %}
                                 {% for alt in item.alternatives %}
                                     <li class="list-group-item p-0">
                                         <button type="button"
                                                 class="list-group-item list-group-item-action alternative-choice {% if saved_substitutions.get(normalize_name(item.name), '') == alt.ingredient %}active{% endif %}"
-                                                data-select-id="alternative-{{ ingredient_index }}" data-value="{{ alt.ingredient|e }}">
+                                                data-select-id="alternative-{{ ingredient_index }}"
+                                                data-value="{{ alt.ingredient|e }}">
                                             {{ alt.ingredient }}
                                         </button>
                                     </li>
@@ -356,17 +418,32 @@
             {% endfor %}
 
             <div class="mt-4">
-                <button type="button" class="btn btn-success btn-lg" id="view-health-score">
-                    <i class="fa-solid fa-heart-pulse me-2"></i>View Health Score
+                <button type="button"
+                        class="btn btn-success btn-lg"
+                        id="view-health-score">
+                    <i class="fa-solid fa-heart-pulse me-2"></i>
+                    View Health Score
                 </button>
-                <div id="substitution-status" class="small mt-2" role="status" aria-live="polite"></div>
-                <div id="health-score-result" class="health-result mt-3" hidden aria-live="polite">
-                    <h5 class="mb-2"><i class="fa-solid fa-heart-pulse text-success me-2"></i>Recipe Health Score</h5>
+
+                <div id="substitution-status"
+                     class="small mt-2"
+                     role="status"
+                     aria-live="polite"></div>
+
+                <div id="health-score-result"
+                     class="health-result mt-3"
+                     hidden aria-live="polite">
+                    <h5 class="mb-2">
+                        <i class="fa-solid fa-heart-pulse text-success me-2"></i>
+                        Recipe Health Score
+                    </h5>
                     <div id="overall-score-value" class="overall-score">--/100</div>
                 </div>
             </div>
         {% else %}
-            <p class="text-muted">Ingredient information is not available for this recipe.</p>
+            <p class="text-muted">
+                Ingredient information is not available for this recipe.
+            </p>
         {% endif %}
     </section>
 
@@ -378,52 +455,115 @@
         </h4>
 
         {% if recipe.instructions %}
-
             {% if recipe.instructions is string %}
-
                 <p class="mb-0" style="white-space: pre-line;">{{ recipe.instructions }}</p>
-
             {% else %}
-
                 {% for step in recipe.instructions %}
                     <div class="instruction-item">
-                        <div class="step-number">
-                            {{ loop.index }}
-                        </div>
-
+                        <div class="step-number">{{ loop.index }}</div>
                         <div>{{ step }}</div>
                     </div>
                 {% endfor %}
-
             {% endif %}
-
         {% elif recipe.steps %}
-
             {% if recipe.steps is string %}
-
                 <p class="mb-0" style="white-space: pre-line;">{{ recipe.steps }}</p>
-
             {% else %}
-
                 {% for step in recipe.steps %}
                     <div class="instruction-item">
-                        <div class="step-number">
-                            {{ loop.index }}
-                        </div>
-
+                        <div class="step-number">{{ loop.index }}</div>
                         <div>{{ step }}</div>
                     </div>
                 {% endfor %}
-
             {% endif %}
-
         {% else %}
-
             <p class="text-muted">
                 Cooking instructions are not available for this recipe.
             </p>
-
         {% endif %}
+    </section>
+
+    <!-- NEW: Cooking Assistant Chatbot -->
+    <section class="content-card" id="cooking-chat">
+        <h4 class="section-title">
+            <i class="fa-solid fa-comments me-2"></i>
+            Cooking Assistant
+        </h4>
+
+        <p class="text-muted">
+            Ask questions about this recipe, its ingredients, cooking steps,
+            preparation time, or cuisine.
+        </p>
+
+        <div class="chat-panel">
+            <div class="chat-panel-header">
+                <div class="fw-bold">
+                    <i class="fa-solid fa-robot me-2"></i>
+                    Smart Recipe Assistant
+                </div>
+                <small>Ask a question about the recipe displayed on this page.</small>
+            </div>
+
+            <div id="chat-messages"
+                 class="chat-messages"
+                 role="log"
+                 aria-live="polite"
+                 aria-relevant="additions">
+                <div class="chat-message assistant">
+                    <div class="chat-bubble">
+                        Hello! I can help you with this recipe.
+
+                        Try asking:
+                        - What ingredients do I need?
+                        - How do I cook this dish?
+                        - Explain step 2.
+                        - How long does it take?
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <form id="chat-form">
+                    <div class="input-group">
+                        <input type="text"
+                               id="chat-input"
+                               class="form-control"
+                               placeholder="Ask about this recipe..."
+                               autocomplete="off"
+                               maxlength="1000"
+                               required>
+
+                        <button type="submit"
+                                id="chat-send"
+                                class="btn btn-success">
+                            <i class="fa-solid fa-paper-plane me-1"></i>
+                            Send
+                        </button>
+                    </div>
+                </form>
+
+                <div class="chat-suggestions">
+                    <button type="button" class="chat-suggestion"
+                            data-question="What ingredients do I need?">
+                        Ingredients
+                    </button>
+                    <button type="button" class="chat-suggestion"
+                            data-question="How do I cook this dish?">
+                        Cooking steps
+                    </button>
+                    <button type="button" class="chat-suggestion"
+                            data-question="How long does it take?">
+                        Preparation time
+                    </button>
+                    <button type="button" class="chat-suggestion"
+                            data-question="What cuisine is this dish?">
+                        Cuisine
+                    </button>
+                </div>
+
+                <div id="chat-status" class="chat-status mt-2" role="status"></div>
+            </div>
+        </div>
     </section>
 
     <!-- Recipe source -->
@@ -453,7 +593,6 @@
 
 </main>
 
-<!-- Footer -->
 <footer>
     <div class="container">
         Smart Recipe Finder
@@ -462,11 +601,13 @@
     </div>
 </footer>
 
-<!-- Bootstrap JavaScript -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
 (function () {
+    "use strict";
+
+    // Existing health-score and ingredient-substitution functionality.
     const recipeKey = {{ recipe_key|tojson }};
     const selectors = Array.from(
         document.querySelectorAll(".ingredient-alternative")
@@ -487,8 +628,8 @@
         const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            credentials: "same-origin"
+            credentials: "same-origin",
+            body: JSON.stringify(payload)
         });
 
         const data = await response.json().catch(function () {
@@ -496,7 +637,9 @@
         });
 
         if (!response.ok || data.success === false) {
-            throw new Error(data.error || "Request failed. Please try again.");
+            throw new Error(
+                data.error || "Request failed. Please try again."
+            );
         }
 
         return data;
@@ -539,12 +682,12 @@
                 ingredients: getIngredients()
             });
 
-            // Do not allow an older response to overwrite a newer score.
             if (requestId !== latestScoreRequest) return;
 
             if (resultPanel) resultPanel.hidden = false;
 
             const rawScore = data.overall_score;
+
             if (
                 rawScore === null ||
                 rawScore === undefined ||
@@ -553,21 +696,32 @@
             ) {
                 if (scoreValue) scoreValue.textContent = "Unavailable";
             } else {
-                const score = Math.max(0, Math.min(100, Number(rawScore)));
-                if (scoreValue) scoreValue.textContent = score.toFixed(1) + "/100";
+                const score = Math.max(
+                    0,
+                    Math.min(100, Number(rawScore))
+                );
+
+                if (scoreValue) {
+                    scoreValue.textContent = score.toFixed(1) + "/100";
+                }
             }
 
             if (resultPanel) {
-                resultPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                resultPanel.scrollIntoView({
+                    behavior: "smooth",
+                    block: "nearest"
+                });
             }
 
             setStatus("Health score updated.", "success");
+
         } catch (error) {
             if (requestId !== latestScoreRequest) return;
 
             if (resultPanel) resultPanel.hidden = false;
             if (scoreValue) scoreValue.textContent = "Unavailable";
             setStatus(error.message, "error");
+
         } finally {
             if (requestId === latestScoreRequest && scoreButton) {
                 scoreButton.disabled = pendingSaves > 0;
@@ -577,8 +731,6 @@
         }
     }
 
-    // Make the alternative ingredient choices clickable and keep the
-    // corresponding hidden select as the single source of truth.
     document.querySelectorAll(".alternative-choice").forEach(function (choice) {
         choice.addEventListener("click", function () {
             const select = document.getElementById(choice.dataset.selectId);
@@ -587,25 +739,23 @@
             select.value = choice.dataset.value;
             select.dispatchEvent(new Event("change", { bubbles: true }));
 
-            document.querySelectorAll(".alternative-choice").forEach(function (otherChoice) {
-                if (otherChoice.dataset.selectId === choice.dataset.selectId) {
-                    otherChoice.classList.toggle("active", otherChoice === choice);
+            document.querySelectorAll(".alternative-choice").forEach(function (other) {
+                if (other.dataset.selectId === choice.dataset.selectId) {
+                    other.classList.toggle("active", other === choice);
                 }
             });
         });
     });
 
-    // Save each user's alternative selection to the existing backend API.
-    // After the save succeeds, automatically recalculate the consolidated
-    // recipe health score using all currently selected ingredients.
     selectors.forEach(function (select) {
         select.addEventListener("change", async function () {
             const selectionRequestId = ++latestSelectionRequest;
-            latestScoreRequest++; // invalidate a score based on old selections
+            latestScoreRequest++;
             pendingSaves++;
 
             if (resultPanel) resultPanel.hidden = true;
             if (scoreButton) scoreButton.disabled = true;
+
             setStatus("Saving your choice…", "pending");
 
             try {
@@ -617,14 +767,17 @@
 
                 if (selectionRequestId !== latestSelectionRequest) return;
 
-                setStatus("Ingredient choice saved. Updating health score…", "pending");
+                setStatus("Choice saved. Updating health score…", "pending");
                 await calculateHealthScore();
+
             } catch (error) {
                 if (selectionRequestId === latestSelectionRequest) {
                     setStatus(error.message, "error");
                 }
+
             } finally {
                 pendingSaves = Math.max(0, pendingSaves - 1);
+
                 if (scoreButton) {
                     scoreButton.disabled = pendingSaves > 0;
                 }
@@ -632,11 +785,13 @@
         });
     });
 
-    // The button calculates/displays one overall recipe score only.
     if (scoreButton) {
         scoreButton.addEventListener("click", function () {
             if (pendingSaves > 0) {
-                setStatus("Please wait while your ingredient choice is saved.", "pending");
+                setStatus(
+                    "Please wait while your ingredient choice is saved.",
+                    "pending"
+                );
                 return;
             }
 
@@ -647,7 +802,126 @@
             calculateHealthScore();
         });
     }
+
+    // NEW: Cooking assistant integration.
+    const chatForm = document.getElementById("chat-form");
+    const chatInput = document.getElementById("chat-input");
+    const chatSend = document.getElementById("chat-send");
+    const chatMessages = document.getElementById("chat-messages");
+    const chatStatus = document.getElementById("chat-status");
+
+    // Pass the current recipe data to /api/chat.
+    // These values come from the recipe already displayed by Flask.
+    const recipeContext = {{ recipe | tojson }};
+
+    function addChatMessage(sender, message) {
+        const wrapper = document.createElement("div");
+        wrapper.className =
+            "chat-message " +
+            (sender === "You" ? "user" : "assistant");
+
+        const bubble = document.createElement("div");
+        bubble.className = "chat-bubble";
+
+        // textContent prevents user input from being interpreted as HTML.
+        bubble.textContent = String(message);
+
+        wrapper.appendChild(bubble);
+        chatMessages.appendChild(wrapper);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    async function sendChatMessage(message) {
+        message = String(message || "").trim();
+
+        if (!message || !chatForm || chatSend.disabled) return;
+
+        addChatMessage("You", message);
+
+        chatInput.value = "";
+        chatInput.disabled = true;
+        chatSend.disabled = true;
+        chatStatus.textContent = "Assistant is preparing a response…";
+
+        try {
+            const response = await fetch("/api/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                credentials: "same-origin",
+                body: JSON.stringify({
+                    message: message,
+                    recipe_context: recipeContext
+                })
+            });
+
+            // Handle authentication redirects or non-JSON server errors.
+            const contentType = response.headers.get("content-type") || "";
+
+            if (!contentType.includes("application/json")) {
+                if (response.redirected) {
+                    throw new Error(
+                        "Your session may have expired. Log in again and reopen the recipe."
+                    );
+                }
+
+                throw new Error(
+                    "The server did not return JSON. Check the Flask terminal for errors."
+                );
+            }
+
+            const data = await response.json();
+
+            if (!response.ok || data.success === false) {
+                throw new Error(
+                    data.error || "The chatbot request failed."
+                );
+            }
+
+            addChatMessage(
+                "Assistant",
+                data.reply || "Sorry, no response was returned."
+            );
+
+            chatStatus.textContent =
+                data.source === "gemini"
+                    ? "Answered using Gemini."
+                    : "Answered using the local cooking assistant.";
+
+        } catch (error) {
+            addChatMessage(
+                "Assistant",
+                "I couldn't process that request. " + error.message
+            );
+
+            chatStatus.textContent =
+                "Check your connection and the Flask server, then try again.";
+
+            console.error("Cooking assistant error:", error);
+
+        } finally {
+            chatInput.disabled = false;
+            chatSend.disabled = false;
+            chatInput.focus();
+        }
+    }
+
+    if (chatForm && chatInput && chatSend && chatMessages) {
+        chatForm.addEventListener("submit", function (event) {
+            event.preventDefault();
+            sendChatMessage(chatInput.value);
+        });
+
+        document.querySelectorAll(".chat-suggestion").forEach(function (button) {
+            button.addEventListener("click", function () {
+                sendChatMessage(button.dataset.question);
+            });
+        });
+    }
 })();
 </script>
+
 </body>
 </html>
