@@ -6,8 +6,7 @@ import requests
 class RemoteAIClient:
     def classify_image(self, image_path_or_bytes, top_k=3):
         base_url = os.environ.get("AI_SERVICE_URL", "").rstrip("/")
-        api_key = os.environ.get("AI_SERVICE_API_KEY", "")
-
+        api_key = os.environ.get("AI_SERVICE_API_KEY", "").strip()
         if not base_url:
             raise RuntimeError("AI_SERVICE_URL is not configured.")
 
