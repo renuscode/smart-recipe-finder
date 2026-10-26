@@ -26,8 +26,10 @@ class RemoteAIClient:
 
         response = requests.post(
             f"{base_url}/classify",
-            headers={"x-api-key": api_key},
-            files={"file": (filename, image_bytes, content_type)},
+            headers={
+    "x-api-key": api_key,
+    "ngrok-skip-browser-warning": "true",
+},            files={"file": (filename, image_bytes, content_type)},
             timeout=180,
         )
 
