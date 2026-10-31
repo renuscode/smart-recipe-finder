@@ -1,3 +1,4 @@
+
 """
 ml_engine.py
 Machine Learning & Food Recognition Engine for Smart Recipe Finder.
@@ -36,6 +37,39 @@ RECIPES_CSV = os.path.join(
 
 class MLEngine:
 
+    # ======================================================
+    # NEW: FOOD / NON-FOOD VALIDATION PROMPTS
+    # ======================================================
+
+    FOOD_SCORE_THRESHOLD = 0.20
+    FOOD_MARGIN_THRESHOLD = 0.015
+
+    FOOD_PROMPTS = [
+        "a photograph of Indian food on a plate",
+        "a close-up photograph of a cooked food dish",
+        "a photograph of traditional Indian cuisine",
+        "a photograph of rice, vegetables and curry",
+        "a photograph of a prepared meal ready to eat",
+        "a photograph of a food item on a table",
+        "a photograph of a person serving food",
+        "a photograph of food displayed on a computer screen",
+        "a photograph of food displayed on a mobile phone screen",
+        "a screenshot containing a clear photograph of food",
+    ]
+
+    NON_FOOD_PROMPTS = [
+        "a photograph of a laptop computer",
+        "a screenshot of a computer desktop",
+        "a screenshot of a computer application window",
+        "a photograph of a computer keyboard and mouse",
+        "a photograph of a mobile phone without food",
+        "a screenshot containing text and documents",
+        "a photograph of a building or landscape",
+        "a photograph of a vehicle",
+        "a photograph of an animal",
+        "a photograph of furniture or household objects",
+    ]
+
     def __init__(self, model_path=MODEL_PATH):
 
         self.model_path = model_path
@@ -70,10 +104,23 @@ class MLEngine:
         self.dish_to_varieties = {}
 
         # --------------------------------------------------
+        # NEW: FOOD VALIDATION FEATURES
+        # --------------------------------------------------
+
+        self.food_validation_features = None
+        self.non_food_validation_features = None
+
+        # --------------------------------------------------
         # LOAD MODEL
         # --------------------------------------------------
 
         self.load_model()
+
+        # --------------------------------------------------
+        # NEW: PREPARE FOOD VALIDATION EMBEDDINGS
+        # --------------------------------------------------
+
+        self.setup_validation_embeddings()
 
         # --------------------------------------------------
         # PREPARE DISH AND VARIETY EMBEDDINGS
@@ -115,6 +162,117 @@ class MLEngine:
         print(
             "[ML Engine] Model loaded successfully."
         )
+
+
+    # ======================================================
+    # NEW: SETUP FOOD / NON-FOOD VALIDATION EMBEDDINGS
+    # ======================================================
+
+    def setup_validation_embeddings(self):
+
+        """
+        Prepares food and non-food text embeddings
+        using the existing CLIP model.
+
+        No additional model is downloaded.
+        """
+
+        print(
+            "[ML Engine] Preparing food validation embeddings..."
+        )
+
+        with torch.no_grad():
+
+            food_tokens = clip.tokenize(
+                self.FOOD_PROMPTS
+            ).to(self.device)
+
+            non_food_tokens = clip.tokenize(
+                self.NON_FOOD_PROMPTS
+            ).to(self.device)
+
+            food_features = self.model.encode_text(
+                food_tokens
+            )
+
+            non_food_features = self.model.encode_text(
+                non_food_tokens
+            )
+
+            self.food_validation_features = (
+                food_features
+                /
+                food_features.norm(
+                    dim=-1,
+                    keepdim=True
+                )
+            )
+
+            self.non_food_validation_features = (
+                non_food_features
+                /
+                non_food_features.norm(
+                    dim=-1,
+                    keepdim=True
+                )
+            )
+
+        print(
+            "[ML Engine] Food validation embeddings ready."
+        )
+
+
+    # ======================================================
+    # NEW: VALIDATE FOOD IMAGE
+    # ======================================================
+
+    def validate_food_image(self, image_features):
+
+        """
+        Compares the uploaded image with food and
+        non-food descriptions using CLIP.
+
+        Returns the validation result and similarity scores.
+        """
+
+        food_similarities = (
+            image_features
+            @
+            self.food_validation_features.T
+        )[0]
+
+        non_food_similarities = (
+            image_features
+            @
+            self.non_food_validation_features.T
+        )[0]
+
+        # Average the three strongest food similarities
+        food_score = torch.topk(
+            food_similarities,
+            k=min(3, len(self.FOOD_PROMPTS))
+        ).values.mean().item()
+
+        # Average the three strongest non-food similarities
+        non_food_score = torch.topk(
+            non_food_similarities,
+            k=min(3, len(self.NON_FOOD_PROMPTS))
+        ).values.mean().item()
+
+        margin = food_score - non_food_score
+
+        is_food = (
+            food_score >= self.FOOD_SCORE_THRESHOLD
+            and
+            margin >= self.FOOD_MARGIN_THRESHOLD
+        )
+
+        return {
+            "is_food": is_food,
+            "food_score": round(food_score, 4),
+            "non_food_score": round(non_food_score, 4),
+            "margin": round(margin, 4)
+        }
 
 
     # ======================================================
@@ -494,6 +652,36 @@ class MLEngine:
                 )
 
             )
+
+
+            # =================================================
+            # NEW: VALIDATE FOOD IMAGE BEFORE DISH PREDICTION
+            # =================================================
+
+            validation = self.validate_food_image(
+                image_features
+            )
+
+            print(
+                "[ML Engine] Image validation:",
+                validation
+            )
+
+            if not validation["is_food"]:
+
+                return {
+
+                    "success": False,
+
+                    "error": (
+                        "The uploaded image does not appear "
+                        "to contain recognizable food. "
+                        "Please upload a food image."
+                    ),
+
+                    "validation": validation
+
+                }
 
 
             # ----------------------------------------------
