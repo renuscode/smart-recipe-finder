@@ -904,9 +904,7 @@ def api_classify():
 
         app.logger.info(
             "Recipe lookup completed; found=%s",
-            recipe_data.get("found", False)
-            if isinstance(recipe_data, dict)
-            else False,
+            isinstance(recipe_data, dict),
         )
 
     except Exception:
@@ -1021,11 +1019,10 @@ def api_classify():
     })
 
     if isinstance(recipe_data, dict):
-        response_data["recipe_found"] = recipe_data.get(
-            "found",
-            False,
-        )
+        response_data["recipe_found"] = True
         response_data["recipe"] = recipe_data
+    else:
+        response_data["recipe_found"] = False
 
     app.logger.info(
         "Classification and database processing completed for %s",
@@ -1255,10 +1252,7 @@ def recipe_page():
     # SAVE RECIPE TO DATABASE
     # --------------------------------------------------------
 
-    if (
-        isinstance(recipe_data, dict)
-        and recipe_data.get("found")
-    ):
+    if isinstance(recipe_data, dict):
         try:
             actual_dish = (
                 recipe_data.get("matched_dish")
@@ -1392,10 +1386,7 @@ def recipe_page():
     # SAVE VIEWED RECIPE TO THE LOGGED-IN USER'S HISTORY
     # --------------------------------------------------------
 
-    if (
-        isinstance(recipe_data, dict)
-        and recipe_data.get("found")
-    ):
+    if isinstance(recipe_data, dict):
         try:
             save_viewed_recipe(
                 session["user_id"],
@@ -1783,3 +1774,4 @@ if __name__ == "__main__":
         port=port,
         debug=False,
     )
+
