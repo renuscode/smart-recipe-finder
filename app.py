@@ -969,7 +969,6 @@ def api_classify():
 
     if (
         isinstance(recipe_data, dict)
-        and recipe_data.get("found")
     ):
         try:
             recipe_name = (
