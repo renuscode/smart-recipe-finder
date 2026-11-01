@@ -3,6 +3,9 @@
 
 The source recipe CSV is read-only. Lookup helper columns are
 created in memory and are not written back to the CSV.
+
+Local image paths stored in the CSV are converted into Flask URLs
+so recipe images can be displayed locally and on Render.
 """
 
 import os
@@ -82,6 +85,74 @@ def _clean_key(value):
     return re.sub(r"\s+", " ", value).strip()
 
 
+def convert_image_path_to_url(image_value):
+    """Convert a CSV image path into a browser-accessible Flask URL.
+
+    Examples:
+        C:\\recipe_project\\images\\Aloo Paratha\\Paratha (12).jpg
+
+    becomes:
+
+        /dataset_images/Aloo%20Paratha/Paratha%20%2812%29.jpg
+
+    If multiple image paths are stored in the CSV separated by
+    semicolons, the first path is used.
+    """
+
+    image_path = _clean(image_value)
+
+    if not image_path:
+        return ""
+
+    # The CSV may contain multiple image paths separated by semicolons.
+    image_path = image_path.split(";")[0].strip()
+
+    if not image_path:
+        return ""
+
+    # Preserve an image URL if the CSV already contains one.
+    if image_path.lower().startswith(("http://", "https://")):
+        return image_path
+
+    # Normalize Windows and Linux path separators.
+    image_path = image_path.replace("\\", "/")
+
+    lower_path = image_path.lower()
+
+    # Find the folder after the images directory.
+    marker = "/images/"
+
+    if marker in lower_path:
+        marker_position = lower_path.rfind(marker)
+        relative_path = image_path[
+            marker_position + len(marker):
+        ]
+
+    elif lower_path.startswith("images/"):
+        relative_path = image_path[len("images/"):]
+
+    elif lower_path.startswith("/images/"):
+        relative_path = image_path[len("/images/"):]
+
+    else:
+        # Do not expose arbitrary filesystem paths.
+        return ""
+
+    relative_path = relative_path.strip("/")
+
+    if not relative_path:
+        return ""
+
+    # Encode each path section separately.
+    # This safely handles spaces, brackets, and special characters.
+    encoded_path = "/".join(
+        urllib.parse.quote(part, safe="")
+        for part in relative_path.split("/")
+    )
+
+    return f"/dataset_images/{encoded_path}"
+
+
 class RecipeEngine:
     """Load, search, and format recipes."""
 
@@ -139,11 +210,18 @@ class RecipeEngine:
         self.df["matched_dish_clean"] = (
             self.df["matched_dish"].map(_clean_key)
         )
+
         self.df["predicted_variety_clean"] = (
             self.df["predicted_variety"].map(_clean_key)
         )
-        self.df["name_clean"] = self.df["name"].map(_clean_key)
-        self.df["cuisine_clean"] = self.df["cuisine"].map(_clean_key)
+
+        self.df["name_clean"] = (
+            self.df["name"].map(_clean_key)
+        )
+
+        self.df["cuisine_clean"] = (
+            self.df["cuisine"].map(_clean_key)
+        )
 
         print(
             f"[RecipeEngine] Loaded {len(self.df)} recipes "
@@ -224,6 +302,7 @@ class RecipeEngine:
                 ).strip()
 
                 name = match.group("name").strip(" ,.;")
+
             else:
                 amount = ""
                 name = line.strip(" ,.;")
@@ -232,12 +311,16 @@ class RecipeEngine:
                 continue
 
             try:
-                nutrition = ingredient_insights.get_health_score(name)
+                nutrition = ingredient_insights.get_health_score(
+                    name
+                )
+
             except Exception as exc:
                 print(
                     f"[RecipeEngine] Nutrition lookup failed for "
                     f"{name!r}: {exc}"
                 )
+
                 nutrition = {
                     "available": False,
                     "score": None,
@@ -246,15 +329,19 @@ class RecipeEngine:
                 }
 
             try:
-                alternatives = ingredient_insights.get_alternatives(
-                    name,
-                    limit=3,
+                alternatives = (
+                    ingredient_insights.get_alternatives(
+                        name,
+                        limit=3,
+                    )
                 )
+
             except Exception as exc:
                 print(
                     f"[RecipeEngine] Alternative lookup failed for "
                     f"{name!r}: {exc}"
                 )
+
                 alternatives = []
 
             output.append(
@@ -270,7 +357,9 @@ class RecipeEngine:
 
     def _format_recipe_dict(self, row):
         """Convert a recipe row to a dictionary for the recipe page."""
-        instructions = _clean(row.get("instructions", ""))
+        instructions = _clean(
+            row.get("instructions", "")
+        )
 
         steps = [
             step.strip()
@@ -278,9 +367,22 @@ class RecipeEngine:
             if step.strip()
         ]
 
-        dish = _clean(row.get("matched_dish", ""))
-        variety = _clean(row.get("predicted_variety", ""))
-        name = _clean(row.get("name", ""))
+        dish = _clean(
+            row.get("matched_dish", "")
+        )
+
+        variety = _clean(
+            row.get("predicted_variety", "")
+        )
+
+        name = _clean(
+            row.get("name", "")
+        )
+
+        # Convert the CSV's local Windows image path into a Flask URL.
+        image_url = convert_image_path_to_url(
+            row.get("image_url", "")
+        )
 
         return {
             "name": name or variety or dish or "Recipe",
@@ -288,22 +390,42 @@ class RecipeEngine:
             "variety": variety,
             "matched_dish": dish,
             "predicted_variety": variety,
-            "description": _clean(row.get("description", "")),
-            "cuisine": _clean(row.get("cuisine", "")),
-            "course": _clean(row.get("course", "")),
-            "diet": _clean(row.get("diet", "")),
-            "prep_time": _clean(row.get("prep_time", "")),
-            "preparation_time": _clean(row.get("prep_time", "")),
-            "cooking_time": _clean(row.get("cooking_time", "")),
-            "servings": _clean(row.get("servings", "")),
-            "image_url": _clean(row.get("image_url", "")),
+            "description": _clean(
+                row.get("description", "")
+            ),
+            "cuisine": _clean(
+                row.get("cuisine", "")
+            ),
+            "course": _clean(
+                row.get("course", "")
+            ),
+            "diet": _clean(
+                row.get("diet", "")
+            ),
+            "prep_time": _clean(
+                row.get("prep_time", "")
+            ),
+            "preparation_time": _clean(
+                row.get("prep_time", "")
+            ),
+            "cooking_time": _clean(
+                row.get("cooking_time", "")
+            ),
+            "servings": _clean(
+                row.get("servings", "")
+            ),
+            "image_url": image_url,
             "ingredients": self.parse_ingredients(
                 row.get("ingredients", "")
             ),
             "instructions": instructions,
             "steps": steps,
-            "source": _clean(row.get("source", "")),
-            "source_url": _clean(row.get("source_url", "")),
+            "source": _clean(
+                row.get("source", "")
+            ),
+            "source_url": _clean(
+                row.get("source_url", "")
+            ),
         }
 
     def get_recipe(
@@ -327,14 +449,18 @@ class RecipeEngine:
             ]
 
             if not matches.empty:
-                return self._format_recipe_dict(matches.iloc[0])
+                return self._format_recipe_dict(
+                    matches.iloc[0]
+                )
 
             matches = self.df[
                 self.df["name_clean"] == variety_key
             ]
 
             if not matches.empty:
-                return self._format_recipe_dict(matches.iloc[0])
+                return self._format_recipe_dict(
+                    matches.iloc[0]
+                )
 
         # Next, try the requested dish.
         dish_key = _clean_key(dish)
@@ -345,7 +471,9 @@ class RecipeEngine:
             ]
 
             if not matches.empty:
-                return self._format_recipe_dict(matches.iloc[0])
+                return self._format_recipe_dict(
+                    matches.iloc[0]
+                )
 
             matches = self.df[
                 (self.df["predicted_variety_clean"] == dish_key)
@@ -353,7 +481,9 @@ class RecipeEngine:
             ]
 
             if not matches.empty:
-                return self._format_recipe_dict(matches.iloc[0])
+                return self._format_recipe_dict(
+                    matches.iloc[0]
+                )
 
             # Partial matching as a fallback.
             matches = self.df[
@@ -365,11 +495,14 @@ class RecipeEngine:
             ]
 
             if not matches.empty:
-                return self._format_recipe_dict(matches.iloc[0])
+                return self._format_recipe_dict(
+                    matches.iloc[0]
+                )
 
         # Finally, try image-classification predictions in order.
         if isinstance(top_predictions, list):
             for prediction in top_predictions:
+
                 if isinstance(prediction, dict):
                     prediction_name = (
                         prediction.get("raw_name")
@@ -377,10 +510,13 @@ class RecipeEngine:
                         or prediction.get("dish")
                         or ""
                     )
+
                 else:
                     prediction_name = str(prediction)
 
-                prediction_key = _clean_key(prediction_name)
+                prediction_key = _clean_key(
+                    prediction_name
+                )
 
                 if not prediction_key:
                     continue
@@ -395,7 +531,9 @@ class RecipeEngine:
                 ]
 
                 if not matches.empty:
-                    return self._format_recipe_dict(matches.iloc[0])
+                    return self._format_recipe_dict(
+                        matches.iloc[0]
+                    )
 
                 matches = self.df[
                     self.df["name_clean"].str.contains(
@@ -406,7 +544,9 @@ class RecipeEngine:
                 ]
 
                 if not matches.empty:
-                    return self._format_recipe_dict(matches.iloc[0])
+                    return self._format_recipe_dict(
+                        matches.iloc[0]
+                    )
 
         return None
 
@@ -422,20 +562,30 @@ class RecipeEngine:
 
         mask = (
             self.df["name_clean"].str.contains(
-                re.escape(query_key), na=False, regex=True
+                re.escape(query_key),
+                na=False,
+                regex=True,
             )
             | self.df["matched_dish_clean"].str.contains(
-                re.escape(query_key), na=False, regex=True
+                re.escape(query_key),
+                na=False,
+                regex=True,
             )
             | self.df["predicted_variety_clean"].str.contains(
-                re.escape(query_key), na=False, regex=True
+                re.escape(query_key),
+                na=False,
+                regex=True,
             )
             | self.df["cuisine_clean"].str.contains(
-                re.escape(query_key), na=False, regex=True
+                re.escape(query_key),
+                na=False,
+                regex=True,
             )
         )
 
-        results = self.df.loc[mask].head(max(1, int(limit)))
+        results = self.df.loc[mask].head(
+            max(1, int(limit))
+        )
 
         return [
             self._format_recipe_dict(row)
