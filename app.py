@@ -14,6 +14,7 @@ Features:
 - Ingredient health scores
 - Hindi-to-English recipe translation
 - Optional cooking assistant
+- Per-user recipe viewing history
 - Local development and deployment support
 """
 
@@ -52,6 +53,8 @@ from models_db import (
     get_dish_by_name,
     update_dish,
     save_recipe,
+    save_viewed_recipe,
+    get_viewed_recipes,
 )
 
 from recipe_preferences import (
@@ -86,14 +89,11 @@ IS_PRODUCTION = (
     or bool(os.environ.get("RENDER"))
 )
 
-# Set FLASK_SECRET_KEY in your environment before deployment.
-# The fallback is intended only for local development.
 app.secret_key = os.environ.get(
     "FLASK_SECRET_KEY",
     "local-development-key-change-before-deployment",
 )
 
-# Maximum request size: 10 MB.
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
 app.config.update(
@@ -424,8 +424,6 @@ def dataset_images(filename):
 @app.route("/uploads/<filename>")
 @login_required
 def uploaded_file(filename):
-    # Only serve files from the application's upload directory.
-    # Login is required because uploaded food images may be user-specific.
     return send_from_directory(
         UPLOADS_DIR,
         filename,
@@ -706,7 +704,6 @@ def api_classify():
         input_type = "camera"
 
         try:
-            # Accept either a base64 string or a data URL.
             if camera_image.startswith("data:"):
                 if "," not in camera_image:
                     raise ValueError("Invalid image data URL.")
@@ -730,13 +727,13 @@ def api_classify():
                     "error": "Camera image is too large.",
                 }), 413
 
-            # Verify that the decoded data resembles a supported image.
-            # This is a basic signature check, not a full image decoder.
             valid_signature = (
                 image_bytes.startswith(b"\xff\xd8\xff")
                 or image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
-                or image_bytes.startswith(b"RIFF")
-                and image_bytes[8:12] == b"WEBP"
+                or (
+                    image_bytes.startswith(b"RIFF")
+                    and image_bytes[8:12] == b"WEBP"
+                )
                 or image_bytes.startswith(b"BM")
             )
 
@@ -749,11 +746,11 @@ def api_classify():
                 + ".jpg"
             )
 
-            # Preserve the actual image format for the file extension.
             if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
                 saved_filename = (
                     "camera_" + uuid.uuid4().hex + ".png"
                 )
+
             elif (
                 image_bytes.startswith(b"RIFF")
                 and image_bytes[8:12] == b"WEBP"
@@ -761,6 +758,7 @@ def api_classify():
                 saved_filename = (
                     "camera_" + uuid.uuid4().hex + ".webp"
                 )
+
             elif image_bytes.startswith(b"BM"):
                 saved_filename = (
                     "camera_" + uuid.uuid4().hex + ".bmp"
@@ -854,7 +852,6 @@ def api_classify():
         if existing_dish:
             dish_id = existing_dish.get("dish_id")
 
-            # Support documents whose ID is stored as MongoDB _id.
             if dish_id is None:
                 dish_id = existing_dish.get("_id")
 
@@ -994,7 +991,6 @@ def api_classify():
             )
 
         except Exception:
-            # Recipe display can still work even if recipe persistence fails.
             app.logger.exception("Could not save recipe metadata")
 
     # --------------------------------------------------------
@@ -1041,15 +1037,49 @@ def api_classify():
 
 
 # ============================================================
-# RECIPE PAGE
+# RECIPE PAGE AND USER RECIPE HISTORY
 # ============================================================
 
 @app.route("/recipe")
 @login_required
 def recipe_page():
-    dish = request.args.get("dish", "").strip()
 
+    dish = request.args.get("dish", "").strip()
     variety = request.args.get("variety", "").strip()
+
+    # --------------------------------------------------------
+    # SHOW RECIPE HISTORY WHEN NO DISH OR VARIETY IS PROVIDED
+    # --------------------------------------------------------
+
+    if not dish and not variety:
+
+        try:
+            recipe_history = get_viewed_recipes(
+                session["user_id"],
+                limit=30,
+            )
+
+        except Exception:
+            app.logger.exception(
+                "Could not retrieve recipe history"
+            )
+
+            recipe_history = []
+
+            flash(
+                "Could not load your recipe history.",
+                "warning",
+            )
+
+        return render_template(
+            "recipe_history.html",
+            recipes=recipe_history,
+            user=session.get("user_email"),
+        )
+
+    # --------------------------------------------------------
+    # GET IMAGE AND PREDICTIONS
+    # --------------------------------------------------------
 
     user_image = (
         request.args.get("user_image", "").strip()
@@ -1072,16 +1102,6 @@ def recipe_page():
 
         except (ValueError, TypeError):
             top_predictions = []
-
-    # --------------------------------------------------------
-    # DEFAULT RECIPE
-    # --------------------------------------------------------
-
-    if not dish:
-        dish = "Dosa"
-
-        if not variety:
-            variety = "plain dosa"
 
     # --------------------------------------------------------
     # GET RECIPE
@@ -1115,6 +1135,7 @@ def recipe_page():
             normalized_ingredients = []
 
             for ingredient_item in recipe_ingredients:
+
                 if isinstance(ingredient_item, str):
                     ingredient_item = {
                         "name": ingredient_item,
@@ -1147,8 +1168,11 @@ def recipe_page():
 
                 # Keep existing alternatives while removing duplicates.
                 for alternative in existing_alternatives:
+
                     if isinstance(alternative, str):
-                        alternative = {"ingredient": alternative}
+                        alternative = {
+                            "ingredient": alternative,
+                        }
 
                     if not isinstance(alternative, dict):
                         continue
@@ -1191,7 +1215,9 @@ def recipe_page():
                     source_alternatives = []
 
                 if isinstance(source_alternatives, list):
+
                     for alternative in source_alternatives:
+
                         if isinstance(alternative, str):
                             alternative = {
                                 "ingredient": alternative,
@@ -1216,6 +1242,7 @@ def recipe_page():
                             and alternative_key not in seen_alternatives
                         ):
                             alternative["ingredient"] = alternative_name
+
                             seen_alternatives.add(alternative_key)
                             combined_alternatives.append(alternative)
 
@@ -1258,6 +1285,7 @@ def recipe_page():
             )
 
             if dish_id:
+
                 update_dish(
                     dish_id=dish_id,
                     description=description,
@@ -1296,6 +1324,7 @@ def recipe_page():
     recipe_name_for_key = variety or dish
 
     if isinstance(recipe_data, dict):
+
         actual_dish_for_key = (
             recipe_data.get("matched_dish")
             or recipe_data.get("dish")
@@ -1328,7 +1357,9 @@ def recipe_page():
     # --------------------------------------------------------
 
     if isinstance(recipe_data, dict):
+
         for ingredient_item in recipe_data.get("ingredients") or []:
+
             if not isinstance(ingredient_item, dict):
                 continue
 
@@ -1359,7 +1390,42 @@ def recipe_page():
         translate_recipe_fields_to_english(recipe_data)
 
     # --------------------------------------------------------
-    # DISPLAY RECIPE
+    # SAVE VIEWED RECIPE TO THE LOGGED-IN USER'S HISTORY
+    # --------------------------------------------------------
+
+    if (
+        isinstance(recipe_data, dict)
+        and recipe_data.get("found")
+    ):
+        try:
+            save_viewed_recipe(
+                session["user_id"],
+                {
+                    "recipe_key": recipe_key,
+                    "dish": dish,
+                    "variety": variety,
+                    "name": (
+                        recipe_data.get("name")
+                        or variety
+                        or dish
+                    ),
+                    "image_url": recipe_data.get("image_url", ""),
+                },
+            )
+
+            app.logger.info(
+                "Recipe viewing history saved for user %s: %s",
+                session["user_id"],
+                recipe_key,
+            )
+
+        except Exception:
+            app.logger.exception(
+                "Could not save viewed recipe history"
+            )
+
+    # --------------------------------------------------------
+    # DISPLAY FULL RECIPE
     # --------------------------------------------------------
 
     return render_template(
@@ -1384,6 +1450,7 @@ def recipe_page():
 )
 @login_required
 def api_save_recipe_substitution():
+
     data = request.get_json(silent=True) or {}
 
     recipe_key = str(
@@ -1442,6 +1509,7 @@ def api_save_recipe_substitution():
 )
 @login_required
 def api_recipe_health_score():
+
     data = request.get_json(silent=True) or {}
 
     recipe_key = str(
@@ -1470,6 +1538,7 @@ def api_recipe_health_score():
     unavailable_count = 0
 
     for item in ingredients:
+
         if not isinstance(item, dict):
             unavailable_count += 1
             continue
@@ -1557,6 +1626,7 @@ def api_recipe_health_score():
 @app.route("/api/recipe")
 @login_required
 def api_recipe():
+
     dish = request.args.get(
         "dish",
         "",
@@ -1597,6 +1667,7 @@ def api_recipe():
 @app.route("/api/search_recipes")
 @login_required
 def api_search_recipes():
+
     query = request.args.get(
         "q",
         "",
@@ -1637,6 +1708,7 @@ def api_search_recipes():
 )
 @login_required
 def api_chat():
+
     try:
         data = request.get_json(silent=True) or {}
 
@@ -1688,6 +1760,7 @@ def api_chat():
 # ============================================================
 
 if __name__ == "__main__":
+
     port = int(os.environ.get("PORT", "5000"))
 
     host = (
